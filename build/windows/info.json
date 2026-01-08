@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.0.1"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.0.1",
+			"CompanyName": "FruitsAI",
+			"FileDescription": "FruitsAI Orange Desktop App",
+			"LegalCopyright": "(c) 2026, FruitsAI",
+			"ProductName": "Orange",
+			"Comments": "FruitsAI Orange - Intelligent Desktop Application"
+		}
+	}
+}

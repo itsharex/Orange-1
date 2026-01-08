@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Orange
+Comment=FruitsAI Orange Desktop App
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/Orange %u
+Terminal=false
+Type=Application
+Icon=Orange
+Categories=Utility;
+StartupWMClass=Orange
+
+ 
