@@ -40,4 +40,6 @@ frontend/.DS_Store
 *.out
 cover.out
 
-docs/
+
+# Documentation
+# docs/ # Docs should be tracked
