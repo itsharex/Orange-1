@@ -1,0 +1,91 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - platform: macos-latest
+            goos: darwin
+            task_os: darwin
+          - platform: ubuntu-latest
+            goos: linux
+            task_os: linux
+          - platform: windows-latest
+            goos: windows
+            task_os: windows
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          check-latest: true
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.55
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Install Linux Dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential nsis rpm
+
+      - name: Build and Package
+        # We assume 'task package' is sufficient for all platforms as defined in Taskfile.yml
+        # Windows: creates bin/Orange.exe (binary) - we might need to handle NSIS if 'task package' runs it
+        # Linux: creates bin/Orange (binary), bin/*.deb, bin/*.rpm, bin/*.AppImage
+        # macOS: creates bin/Orange.app
+        run: task package
+
+      # macOS: Zip the .app bundle
+      - name: Zip macOS App
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cd bin
+          zip -r Orange-macOS-universal.zip Orange.app
+          cd ..
+
+      # Windows: Check for installer or just use binary
+      # According to Taskfile, 'task package' on Windows runs 'create:nsis:installer'
+      # The output location might be build/windows/nsis/Orange-installer.exe or similar.
+      # Let's verify commonly used paths or just use shell globbing in upload
+      
+      - name: Prepare Windows Artifacts
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Move installer to bin if it exists in nsis folder, for easier upload wildcard
+          if (Test-Path "build/windows/nsis/*-installer.exe") {
+            Move-Item "build/windows/nsis/*-installer.exe" "bin/"
+          }
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bin/*.zip
+            bin/*.dmg
+            bin/*.exe
+            bin/*.AppImage
+            bin/*.deb
+            bin/*.rpm
+          # Note: We use wildcards to catch whatever 'task package' produced
+          make_latest: true

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2] - 2026-01-09
+
+### Added
+
+- Added `.github/workflows/release.yml` for automated multi-platform releases.
+- Configured `.gitignore` to exclude `.agent` directory.
+
 ## [0.1.1] - 2026-01-09
 
 ### Added

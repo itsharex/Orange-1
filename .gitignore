@@ -44,3 +44,5 @@ cover.out
 
 # Documentation
 # docs/ # Docs should be tracked
+# Agent
+.agent/
