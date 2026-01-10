@@ -24,68 +24,72 @@ func NewDashboardService() *DashboardService {
 }
 
 // GetStats 获取统计数据
-// GetStats 获取统计数据
+// period: "week" | "month" | "quarter" | "year" | "all"
+// 当 period 为 "all" 时返回全局统计（不限制日期范围）
 func (s *DashboardService) GetStats(userID int64, period string) (*dto.Stats, error) {
+	// 全局统计模式（用于工作台）
+	if period == "all" || period == "" {
+		totalAmount := s.paymentRepo.SumByStatus(userID, "paid") + s.paymentRepo.SumByStatus(userID, "pending")
+		paidAmount := s.paymentRepo.SumByStatus(userID, "paid")
+		pendingAmount := s.paymentRepo.SumByStatus(userID, "pending")
+		overdueAmount := s.paymentRepo.SumOverdue(userID)
+
+		return &dto.Stats{
+			TotalAmount:   totalAmount,
+			PaidAmount:    paidAmount,
+			PendingAmount: pendingAmount,
+			OverdueAmount: overdueAmount,
+		}, nil
+	}
+
+	// 按周期统计模式（用于数据分析页面）
 	now := time.Now()
 	var startDate, endDate string
 	var prevStartDate, prevEndDate string
 
-	// Date calculation logic (Current Period & Previous Period)
 	switch period {
 	case "week":
-		// Current: Last 7 days
 		startDate = now.AddDate(0, 0, -6).Format("2006-01-02")
 		endDate = now.Format("2006-01-02") + " 23:59:59"
-		// Previous: The 7 days before that
 		prevStartDate = now.AddDate(0, 0, -13).Format("2006-01-02")
 		prevEndDate = now.AddDate(0, 0, -7).Format("2006-01-02") + " 23:59:59"
 	case "month":
-		// Current: Last 30 days
 		startDate = now.AddDate(0, 0, -29).Format("2006-01-02")
 		endDate = now.Format("2006-01-02") + " 23:59:59"
-		// Previous
 		prevStartDate = now.AddDate(0, 0, -59).Format("2006-01-02")
 		prevEndDate = now.AddDate(0, 0, -30).Format("2006-01-02") + " 23:59:59"
 	case "quarter":
-		// Current: Last 3 months (90 days approx)
 		startDate = now.AddDate(0, -3, 0).Format("2006-01-02")
 		endDate = now.Format("2006-01-02") + " 23:59:59"
-		// Previous
 		prevStartDate = now.AddDate(0, -6, 0).Format("2006-01-02")
 		prevEndDate = now.AddDate(0, -3, 0).Format("2006-01-02") + " 23:59:59"
 	case "year":
-		// Current: Last 12 months
 		startDate = now.AddDate(-1, 0, 0).Format("2006-01-02")
 		endDate = now.Format("2006-01-02") + " 23:59:59"
-		// Previous
 		prevStartDate = now.AddDate(-2, 0, 0).Format("2006-01-02")
 		prevEndDate = now.AddDate(-1, 0, 0).Format("2006-01-02") + " 23:59:59"
-	default: // Default to Month if empty
+	default:
 		startDate = now.AddDate(0, 0, -29).Format("2006-01-02")
 		endDate = now.Format("2006-01-02") + " 23:59:59"
 		prevStartDate = now.AddDate(0, 0, -59).Format("2006-01-02")
 		prevEndDate = now.AddDate(0, 0, -30).Format("2006-01-02") + " 23:59:59"
 	}
 
-	// Current Stats
-	currTotal, currPaid, currOverdue, currAvgDays, err := s.paymentRepo.GetStatsByPeriod(userID, startDate, endDate)
+	currTotal, currPaid, currPending, currAvgDays, err := s.paymentRepo.GetStatsByPeriod(userID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
-	currPending := currTotal - currPaid
+	currOverdue := s.paymentRepo.SumOverdue(userID)
 
-	// Previous Stats
-	prevTotal, prevPaid, prevOverdue, prevAvgDays, err := s.paymentRepo.GetStatsByPeriod(userID, prevStartDate, prevEndDate)
+	prevTotal, prevPaid, prevPending, prevAvgDays, err := s.paymentRepo.GetStatsByPeriod(userID, prevStartDate, prevEndDate)
 	if err != nil {
 		return nil, err
 	}
-	prevPending := prevTotal - prevPaid
 
-	// Calculate Trends ((Curr - Prev) / Prev)
 	calcTrend := func(curr, prev float64) float64 {
 		if prev == 0 {
 			if curr > 0 {
-				return 100 // 100% growth if from 0 to something
+				return 100
 			}
 			return 0
 		}
@@ -101,7 +105,7 @@ func (s *DashboardService) GetStats(userID int64, period string) (*dto.Stats, er
 		TotalTrend:             calcTrend(currTotal, prevTotal),
 		PaidTrend:              calcTrend(currPaid, prevPaid),
 		PendingTrend:           calcTrend(currPending, prevPending),
-		OverdueTrend:           calcTrend(currOverdue, prevOverdue),
+		OverdueTrend:           0,
 		AvgCollectionDaysTrend: calcTrend(currAvgDays, prevAvgDays),
 	}, nil
 }

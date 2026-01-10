@@ -23,7 +23,7 @@ func NewDashboardHandler() *DashboardHandler {
 func (h *DashboardHandler) Stats(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
-	period := c.DefaultQuery("period", "month")
+	period := c.Query("period") // 不传则返回全局统计
 	stats, err := h.dashboardService.GetStats(userID, period)
 	if err != nil {
 		response.InternalError(c, "获取统计数据失败")

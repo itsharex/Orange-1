@@ -50,6 +50,9 @@ func NewRouter() *gin.Engine {
 			{
 				projectHandler := handler.NewProjectHandler()
 				projects.GET("", projectHandler.List)
+				// 注意：这两个路由必须放在 /:id 之前，否则会被 :id 匹配
+				projects.GET("/check-contract-number", projectHandler.CheckContractNumber)
+				projects.GET("/generate-contract-number", projectHandler.GenerateContractNumber)
 				projects.GET("/:id", projectHandler.Get)
 				projects.POST("", projectHandler.Create)
 				projects.PUT("/:id", projectHandler.Update)

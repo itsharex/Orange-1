@@ -136,6 +136,13 @@ const ensurePaymentItems = () => {
     // Installments mode: Ensure at least one if empty
     if (formData.value.paymentItems.length === 0) {
       addPaymentItem()
+    } else {
+      // 如果从一次性付款切换过来，更新第一个款项的阶段为"首付款"
+      const firstItem = formData.value.paymentItems[0]
+      if (firstItem && firstItem.stage === 'all') {
+        firstItem.stage = 'deposit'
+        firstItem.remark = '' // 清除"项目全款"备注
+      }
     }
   }
 }
@@ -175,10 +182,28 @@ watch(() => formData.value.endDate, (newVal) => {
   } 
 })
 
+// 监听合同日期变化，自动生成合同编号（仅新建模式）
+watch(() => formData.value.contractDate, async (newVal) => {
+  // 仅在新建模式、合同日期有效时自动生成
+  if (!isEditMode.value && newVal) {
+    try {
+      const { data } = await projectApi.generateContractNumber(newVal)
+      if (data.code === 0 && data.data) {
+        formData.value.contractNo = data.data.contract_number
+      }
+    } catch (error) {
+      console.error('生成合同编号失败', error)
+    }
+  }
+})
+
 
 const addPaymentItem = () => {
-  let defaultStage = ''
-  if (collectionStageOptions.value.length > 0) {
+  // 分期付款默认使用"首付款"阶段
+  let defaultStage = 'deposit'
+  // 如果字典中没有 deposit，则使用第一个选项
+  const hasDeposit = collectionStageOptions.value.some(opt => opt.value === 'deposit')
+  if (!hasDeposit && collectionStageOptions.value.length > 0) {
       const first = collectionStageOptions.value[0]
       if (first) defaultStage = first.value
   }
@@ -311,6 +336,20 @@ const handleSubmit = async () => {
     if (!formData.value.totalAmount || parseFloat(formData.value.totalAmount) <= 0) { toast.error('请输入有效的合同总金额'); return }
     if (!formData.value.contractNo) { toast.error('请输入合同编号'); return }
     if (!formData.value.contractDate) { toast.error('请选择合同日期'); return }
+    
+    // 检查合同编号唯一性
+    try {
+      const excludeId = isEditMode.value ? parseInt(route.params.id as string) : 0
+      const { data: checkResult } = await projectApi.checkContractNumber(formData.value.contractNo, excludeId)
+      if (checkResult.code === 0 && checkResult.data?.exists) {
+        toast.error('合同编号已存在，请使用其他编号')
+        return
+      }
+    } catch (error) {
+      console.error('检查合同编号失败', error)
+      toast.error('检查合同编号失败')
+      return
+    }
     
     // Validate Payment Items
     if (formData.value.paymentItems.length === 0) { toast.error('请至少添加一项收款计划'); return }
@@ -496,24 +535,24 @@ onMounted(async () => {
           </div>
 
           <div class="input-group">
+            <label>合同日期 <span class="text-red-500">*</span></label>
+            <div class="input-wrapper">
+              <DatePicker v-model="formData.contractDate" placeholder="请选择合同日期" />
+            </div>
+          </div>
+
+          <div class="input-group">
             <label>合同编号 <span class="text-red-500">*</span></label>
             <div class="input-wrapper">
               <input
                 v-model="formData.contractNo"
                 type="text"
-                placeholder="请输入合同编号"
+                placeholder="选择合同日期后自动生成"
                 spellcheck="false"
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
               />
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>合同日期 <span class="text-red-500">*</span></label>
-            <div class="input-wrapper">
-              <DatePicker v-model="formData.contractDate" placeholder="请选择合同日期" />
             </div>
           </div>
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8] - 2026-01-11
+
+### Fixed
+
+- **UI**: Fixed sticky "Action" column in Project lists for better horizontal scrolling.
+- **UI**: Fixed "Project Name" width (200px) and added text truncation in Project Management and Dashboard tables.
+- **UI**: Resolved visual glitch in "Action" column by enforcing correct background color in Dark Mode.
+
 ## [0.1.7] - 2026-01-10
 
 ### Added

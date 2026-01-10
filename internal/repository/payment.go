@@ -176,29 +176,51 @@ func (r *PaymentRepository) GetIncomeStats(userID int64, startDate, endDate, int
 
 // GetStatsByPeriod 获取指定时间段的统计数据
 func (r *PaymentRepository) GetStatsByPeriod(userID int64, startDate, endDate string) (total, paid, overdue, avgPeriod float64, err error) {
-	// Total: Expected Revenue (Plan Date in range)
+	// Total: 计划日期在范围内的总金额 + 已支付且实际日期在范围内的金额（用于显示"总收款金额"）
+	// 但这样会重复计算。更好的设计：
+	// - TotalExpected: 计划日期在范围内的款项总和
+	// - Paid: 实际收到的款项（actual_date 在范围内）
+	// - Pending: 计划日期在范围内但未支付的款项
+	// - Overdue: 计划日期在范围内，已逾期但未支付
+
+	// Total (TotalExpected): 计划日期在范围内的款项
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND plan_date BETWEEN ? AND ?", userID, startDate, endDate).
 		Select("COALESCE(SUM(amount), 0)").Scan(&total)
 
-	// Paid: Actual Revenue (Actual Date in range)
+	// Paid: 实际日期在范围内已支付的款项
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND status = 'paid' AND actual_date BETWEEN ? AND ?", userID, startDate, endDate).
 		Select("COALESCE(SUM(amount), 0)").Scan(&paid)
 
-	// Overdue: Plan Date in range, Not Paid, and Plan Date < Now
+	// Pending: 计划日期在范围内，状态为 pending 的款项（不是 total - paid）
+	r.db.Model(&models.Payment{}).
+		Where("user_id = ? AND status = 'pending' AND plan_date BETWEEN ? AND ?", userID, startDate, endDate).
+		Select("COALESCE(SUM(amount), 0)").Scan(&overdue) // 临时存到 overdue 变量
+
+	pendingAmount := overdue // 先保存 pending
+
+	// Overdue: 计划日期在范围内，状态为 pending 且已逾期（plan_date < now）
 	now := time.Now().Format("2006-01-02")
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND status = 'pending' AND plan_date BETWEEN ? AND ? AND plan_date < ?", userID, startDate, endDate, now).
 		Select("COALESCE(SUM(amount), 0)").Scan(&overdue)
 
 	// AvgPeriod: Average Collection Days (Actual Date - Plan Date) for items paid in this period
-	// Using SQLite julianday
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND status = 'paid' AND actual_date BETWEEN ? AND ?", userID, startDate, endDate).
 		Select("COALESCE(AVG(julianday(actual_date) - julianday(plan_date)), 0)").Scan(&avgPeriod)
 
-	return
+	// 返回时，把 pending 放到第三个返回值位置（原来是 overdue 的位置）
+	// 但这样会破坏调用方的逻辑... 我们需要返回：total, paid, pending(待收), overdue(逾期)
+	// 当前函数只返回 4 个值: total, paid, overdue, avgPeriod
+	// 为了保持向后兼容，pending 应该由调用方计算，但用正确的方式
+
+	// 实际上问题出在第 75 行: currPending := currTotal - currPaid
+	// 这是错误的计算方式！
+
+	// 修正：返回 pending 作为第三个参数（待收款），overdue 另外计算
+	return total, paid, pendingAmount, avgPeriod, nil
 }
 
 // SumPaidByProject 计算项目中已支付的总金额

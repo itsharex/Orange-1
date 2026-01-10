@@ -261,7 +261,7 @@ onActivated(() => {
         <table class="data-table w-full">
           <thead>
             <tr>
-              <th>项目名称</th>
+              <th class="col-fixed-width-200">项目名称</th>
               <th>客户</th>
               <th>开始日期</th>
               <th>截止日期</th>
@@ -271,7 +271,7 @@ onActivated(() => {
               <th>已收款</th>
               <th>收款进度</th>
               <th>状态</th>
-              <th>操作</th>
+              <th class="col-fixed-right">操作</th>
             </tr>
           </thead>
           <tbody v-if="projects.length > 0">
@@ -281,7 +281,7 @@ onActivated(() => {
               class="project-row cursor-pointer hover:bg-white/5 transition-colors"
               @click="handleRowDbClick(p.id)"
             >
-              <td class="font-medium">{{ p.name }}</td>
+              <td class="font-medium col-fixed-width-200" :title="p.name">{{ p.name }}</td>
               <td class="text-secondary">{{ p.company }}</td>
               <td>{{ formatDate(p.start_date) }}</td>
               <td>{{ formatDate(p.end_date) }}</td>
@@ -302,7 +302,7 @@ onActivated(() => {
                   {{ getStatusLabel(p.status) }}
                 </StatusBadge>
               </td>
-              <td>
+              <td class="col-fixed-right">
                 <div class="flex items-center gap-xs relative">
                   <button
                     class="btn btn-ghost btn-icon btn-sm"
@@ -727,5 +727,40 @@ onActivated(() => {
 [data-theme='dark'] .search-input-wrapper:focus-within {
   border-color: var(--color-primary);
   background: rgba(255, 255, 255, 0.08);
+}
+
+/* Fixed Columns Styles */
+.col-fixed-right {
+  position: sticky;
+  right: 0;
+  z-index: 10;
+  background: var(--bg-content);
+  backdrop-filter: blur(12px);
+  border-left: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* 暗色模式下操作列使用不透明背景，遮挡滚动内容 */
+[data-theme='dark'] .col-fixed-right {
+  border-left: none;
+  background: #333335 !important;
+  backdrop-filter: none;
+}
+
+[data-theme='dark'] th.col-fixed-right,
+[data-theme='dark'] td.col-fixed-right {
+  background: #333335 !important;
+}
+
+[data-theme='dark'] tr:hover td.col-fixed-right {
+  background: #333335 !important;
+}
+
+.col-fixed-width-200 {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

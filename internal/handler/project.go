@@ -136,3 +136,43 @@ func (h *ProjectHandler) Archive(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "归档成功", nil)
 }
+
+// CheckContractNumber 检查合同编号是否已存在
+// GET /api/v1/projects/check-contract-number?contract_number=xxx&exclude_id=xxx
+func (h *ProjectHandler) CheckContractNumber(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	contractNumber := c.Query("contract_number")
+	if contractNumber == "" {
+		response.ParamError(c, "合同编号不能为空")
+		return
+	}
+
+	excludeID, _ := strconv.ParseInt(c.DefaultQuery("exclude_id", "0"), 10, 64)
+
+	exists, err := h.projectService.CheckContractNumberExists(userID, contractNumber, excludeID)
+	if err != nil {
+		response.InternalError(c, "检查合同编号失败")
+		return
+	}
+
+	response.Success(c, gin.H{"exists": exists})
+}
+
+// GenerateContractNumber 生成下一个合同编号
+// GET /api/v1/projects/generate-contract-number?date=2026-01-10
+func (h *ProjectHandler) GenerateContractNumber(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	date := c.Query("date")
+	if date == "" {
+		response.ParamError(c, "日期不能为空")
+		return
+	}
+
+	contractNumber, err := h.projectService.GenerateNextContractNumber(userID, date)
+	if err != nil {
+		response.InternalError(c, "生成合同编号失败")
+		return
+	}
+
+	response.Success(c, gin.H{"contract_number": contractNumber})
+}

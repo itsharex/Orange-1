@@ -106,6 +106,18 @@ export const projectApi = {
   // 获取项目收款列表
   getPayments: (projectId: number) =>
     api.get<ApiResponse<Payment[]>>(`/projects/${projectId}/payments`, { params: { _t: Date.now() } }),
+
+  // 检查合同编号是否已存在
+  checkContractNumber: (contractNumber: string, excludeId?: number) =>
+    api.get<ApiResponse<{ exists: boolean }>>('/projects/check-contract-number', { 
+      params: { contract_number: contractNumber, exclude_id: excludeId || 0, _t: Date.now() } 
+    }),
+
+  // 生成下一个合同编号
+  generateContractNumber: (date: string) =>
+    api.get<ApiResponse<{ contract_number: string }>>('/projects/generate-contract-number', { 
+      params: { date, _t: Date.now() } 
+    }),
 }
 
 // 收款 API

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/FruitsAI/Orange/internal/database"
@@ -157,4 +158,42 @@ func (s *ProjectService) Delete(id int64) error {
 // Archive 归档项目
 func (s *ProjectService) Archive(id int64) error {
 	return s.projectRepo.UpdateStatus(id, "archived")
+}
+
+// CheckContractNumberExists 检查合同编号是否已存在（限定用户）
+func (s *ProjectService) CheckContractNumberExists(userID int64, contractNumber string, excludeID int64) (bool, error) {
+	return s.projectRepo.ExistsByContractNumber(userID, contractNumber, excludeID)
+}
+
+// GenerateNextContractNumber 生成下一个合同编号（限定用户）
+// 格式: HT{YYYYMMDD}{序号4位}, 如 HT202601100001
+func (s *ProjectService) GenerateNextContractNumber(userID int64, date string) (string, error) {
+	// 解析日期
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return "", err
+	}
+
+	// 前缀: HT + YYYYMMDD
+	prefix := "HT" + t.Format("20060102")
+
+	// 获取该日期前缀的最大编号（限定用户）
+	maxNumber, err := s.projectRepo.GetMaxContractNumberByPrefix(userID, prefix)
+	if err != nil {
+		return "", err
+	}
+
+	// 计算下一个序号
+	nextSeq := 1
+	if maxNumber != "" && len(maxNumber) >= len(prefix)+4 {
+		// 提取序号部分
+		seqStr := maxNumber[len(prefix):]
+		var seq int
+		if _, err := fmt.Sscanf(seqStr, "%d", &seq); err == nil {
+			nextSeq = seq + 1
+		}
+	}
+
+	// 生成新编号
+	return fmt.Sprintf("%s%04d", prefix, nextSeq), nil
 }

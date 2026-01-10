@@ -121,8 +121,8 @@ func (s *PaymentService) Update(id int64, input dto.PaymentRequest) (*models.Pay
 func (s *PaymentService) processPaymentRules(payment *models.Payment) error {
 	// 1. 处理实际收款日期
 	if payment.Status == "paid" && payment.ActualDate == nil {
-		now := time.Now()
-		payment.ActualDate = &now
+		// 如果状态为已收款但没有指定实际日期，使用计划日期作为实际日期
+		payment.ActualDate = &payment.PlanDate
 	}
 	if payment.Status != "paid" {
 		payment.ActualDate = nil

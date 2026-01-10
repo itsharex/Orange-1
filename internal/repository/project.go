@@ -107,3 +107,30 @@ func (r *ProjectRepository) GetStats(userID int64) (totalAmount, paidAmount, pen
 
 	return
 }
+
+// ExistsByContractNumber 检查合同编号是否存在（限定用户）
+func (r *ProjectRepository) ExistsByContractNumber(userID int64, contractNumber string, excludeID int64) (bool, error) {
+	var count int64
+	query := r.db.Model(&models.Project{}).Where("user_id = ? AND contract_number = ?", userID, contractNumber)
+	if excludeID > 0 {
+		query = query.Where("id != ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// GetMaxContractNumberByPrefix 获取指定前缀的最大合同编号（限定用户）
+func (r *ProjectRepository) GetMaxContractNumberByPrefix(userID int64, prefix string) (string, error) {
+	var contractNumber string
+	err := r.db.Model(&models.Project{}).
+		Where("user_id = ? AND contract_number LIKE ?", userID, prefix+"%").
+		Order("contract_number DESC").
+		Limit(1).
+		Pluck("contract_number", &contractNumber).Error
+	if err != nil {
+		return "", err
+	}
+	return contractNumber, nil
+}

@@ -30,7 +30,7 @@ const props = defineProps<{
       <table class="data-table project-table">
         <thead>
           <tr>
-            <th>项目名称</th>
+            <th style="width: 200px; min-width: 200px; max-width: 200px;">项目名称</th>
             <th>客户</th>
             <th>合同金额</th>
             <th>收款进度</th>
@@ -45,7 +45,7 @@ const props = defineProps<{
             class="project-row cursor-pointer hover:bg-white/5 transition-colors"
             @click="goToDetail(p.id)"
           >
-            <td class="font-medium">{{ p.name }}</td>
+            <td class="font-medium" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="p.name">{{ p.name }}</td>
             <td class="text-secondary">{{ p.company }}</td>
             <td>¥{{ p.total_amount.toLocaleString() }}</td>
             <td>
