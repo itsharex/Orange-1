@@ -7,6 +7,9 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -61,6 +64,26 @@ func createAssetHandler() http.Handler {
 func main() {
 	// Load configuration
 	config.Load()
+
+	// SETUP DEBUG LOGGING
+	homeDir, _ := os.UserHomeDir()
+	logPath := filepath.Join(homeDir, "orange_debug.log")
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		// Use file logger
+		slog.SetDefault(slog.New(slog.NewTextHandler(logFile, nil)))
+		log.SetOutput(logFile)
+		slog.Info("Application starting...", "version", "v0.1.5-debug")
+	}
+
+	// PANIC RECOVERY
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("CRITICAL PANIC", "error", r, "stack", string(debug.Stack()))
+			log.Printf("PANIC: %v\nStack: %s", r, debug.Stack())
+			os.Exit(1)
+		}
+	}()
 
 	// Initialize JWT Secret
 	jwt.SecretKey = []byte(config.AppConfig.JWTSecret)
@@ -125,7 +148,7 @@ func main() {
 	})
 
 	// Run the application. This blocks until the application has been exited.
-	err := app.Run()
+	err = app.Run()
 
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {

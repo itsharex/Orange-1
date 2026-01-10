@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5] - 2026-01-10
+
+### Added
+
+- Added debug logging: `orange_debug.log` will be created in the user's home directory to diagnose startup issues.
+- Added panic recovery to check for crashes on Windows.
+
 ## [0.1.4] - 2026-01-10
 
 ### Changed
