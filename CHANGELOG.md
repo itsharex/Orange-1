@@ -1,6 +1,11 @@
 # Changelog
 
-## [0.2.0] - 2026-01-11
+## [0.2.1] - 2026-01-11
+
+### Changed
+
+- **Documentation**: Enhanced `README.md` and `README_EN.md` with visual interface previews (Dashboard, Projects, Analytics, etc.).
+- **Chore**: Removed `.env` file from version control (added to `.gitignore`) to prevent sensitive configuration leakage.
 
 ### Added
 

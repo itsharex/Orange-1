@@ -173,6 +173,33 @@ LOG_COMPRESS=true
 GITHUB_REPO=FruitsAI/Orange
 ```
 
+## 📸 界面预览
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><b>工作台</b></td>
+<td align="center"><b>项目管理</b></td>
+<td align="center"><b>收款日历</b></td>
+</tr>
+<tr>
+<td><img src="frontend/public/dashboard.png" alt="工作台" width="400"></td>
+<td><img src="frontend/public/projects.png" alt="项目管理" width="400"></td>
+<td><img src="frontend/public/calendar.png" alt="收款日历" width="400"></td>
+</tr>
+<tr>
+<td align="center"><b>数据分析</b></td>
+<td align="center"><b>字典管理</b></td>
+<td align="center"><b>关于</b></td>
+</tr>
+<tr>
+<td><img src="frontend/public/analytics.png" alt="数据分析" width="400"></td>
+<td><img src="frontend/public/dictionary.png" alt="字典管理" width="400"></td>
+<td><img src="frontend/public/about.png" alt="关于" width="400"></td>
+</tr>
+</table>
+</div>
+
 ## 📂 目录结构
 
 ```

@@ -174,6 +174,33 @@ LOG_COMPRESS=true
 GITHUB_REPO=FruitsAI/Orange
 ```
 
+## 📸 Interface Preview
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><b>Dashboard</b></td>
+<td align="center"><b>Projects</b></td>
+<td align="center"><b>Calendar</b></td>
+</tr>
+<tr>
+<td><img src="frontend/public/dashboard.png" alt="Dashboard" width="400"></td>
+<td><img src="frontend/public/projects.png" alt="Projects" width="400"></td>
+<td><img src="frontend/public/calendar.png" alt="Calendar" width="400"></td>
+</tr>
+<tr>
+<td align="center"><b>Analytics</b></td>
+<td align="center"><b>Dictionary</b></td>
+<td align="center"><b>About</b></td>
+</tr>
+<tr>
+<td><img src="frontend/public/analytics.png" alt="Analytics" width="400"></td>
+<td><img src="frontend/public/dictionary.png" alt="Dictionary" width="400"></td>
+<td><img src="frontend/public/about.png" alt="About" width="400"></td>
+</tr>
+</table>
+</div>
+
 ## 📂 Project Structure
 
 ```
