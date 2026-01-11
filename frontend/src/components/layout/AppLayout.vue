@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * @file AppLayout.vue
+ * @description 应用主布局组件
+ * 包含侧边栏、顶部导航及主内容区域。实现 Liquid Glass 动态光效和响应式布局逻辑。
+ */
 import { ref, onMounted, onUnmounted } from 'vue'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
@@ -7,9 +12,9 @@ import { useLayoutStore } from '@/stores/layout'
 const layoutStore = useLayoutStore()
 const appBackground = ref<HTMLElement | null>(null)
 
-// Liquid Glass 动态效果逻辑
+// --- Liquid Glass 动态效果逻辑 ---
 const handleMouseMove = (e: MouseEvent) => {
-  // 更新背景光效位置
+  // 1. 更新全局背景光效位置 (追光效果)
   if (appBackground.value) {
     const xPercent = (e.clientX / window.innerWidth) * 100
     const yPercent = (e.clientY / window.innerHeight) * 100
@@ -18,7 +23,7 @@ const handleMouseMove = (e: MouseEvent) => {
     appBackground.value.style.setProperty('--light-y', `${yPercent}%`)
   }
 
-  // 更新玻璃卡片的高光效果
+  // 2. 更新所有玻璃卡片的高光效果 (Specular Highlights)
   updateSpecularHighlights(e)
 }
 
@@ -31,7 +36,7 @@ const updateSpecularHighlights = (e: MouseEvent) => {
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
 
-    // 只在卡片附近时更新，优化性能
+    // 性能优化: 只在鼠标位于卡片附近 (扩充 20%) 时更新 CSS 变量
     if (x >= -20 && x <= 120 && y >= -20 && y <= 120) {
       el.style.setProperty('--specular-x', `${x}%`)
       el.style.setProperty('--specular-y', `${y}%`)
@@ -39,11 +44,13 @@ const updateSpecularHighlights = (e: MouseEvent) => {
   })
 }
 
-// 侧边栏滚动效果
+// --- 侧边栏滚动监听 ---
 const mainContent = ref<HTMLElement | null>(null)
+
 const handleScroll = (e: Event) => {
   const target = e.target as HTMLElement
   const sidebar = document.querySelector('.sidebar')
+  // 当内容滚动超过 50px 时，给侧边栏添加 scrolled 样式 (如增加模糊度或阴影)
   if (sidebar) {
     if (target.scrollTop > 50) {
       sidebar.classList.add('scrolled')
@@ -54,9 +61,10 @@ const handleScroll = (e: Event) => {
 }
 
 onMounted(() => {
+  // 绑定全局鼠标移动事件 (用于光效)
   document.addEventListener('mousemove', handleMouseMove)
-  // 注意：如果是 window 滚动则用 window，如果是 mainContent 滚动则用 mainContent
-  // 原型是 mainContent overflow-y: auto
+  
+  // 绑定主内容区域滚动事件
   if (mainContent.value) {
     mainContent.value.addEventListener('scroll', handleScroll)
   }

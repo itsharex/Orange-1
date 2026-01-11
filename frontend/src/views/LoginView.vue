@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * @file LoginView.vue
+ * @description 用户登录/注册页面
+ * 包含登录和注册双表单切换，支持记住密码、社交登录UI（占位）以及炫酷的动态背景效果。
+ */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'

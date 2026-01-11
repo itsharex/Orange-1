@@ -1,8 +1,14 @@
 <script setup lang="ts">
+/**
+ * @file AppSidebar.vue
+ * @description 应用侧边栏组件
+ * 显示应用 Logo、主菜单和系统菜单。支持折叠状态 (由 LayoutStore 控制)。
+ */
 import { useLayoutStore } from '@/stores/layout'
 
 const layoutStore = useLayoutStore()
 
+// 主业务菜单配置
 const menuItems = [
   { name: '工作台', icon: 'ri-dashboard-3-line', path: '/dashboard' },
   { name: '项目管理', icon: 'ri-folder-line', path: '/projects' },
@@ -10,6 +16,7 @@ const menuItems = [
   { name: '数据分析', icon: 'ri-bar-chart-grouped-line', path: '/analytics' },
 ]
 
+// 系统功能菜单配置
 const systemItems = [
   { name: '系统设置', icon: 'ri-settings-4-line', path: '/settings' },
 ]

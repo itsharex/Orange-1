@@ -1,12 +1,18 @@
 <script setup lang="ts">
+/**
+ * @file DatePicker.vue
+ * @description 日期选择器组件
+ * 支持年/月切换，日期选择，以及与 V-Model 的双向绑定。
+ * 样式适配 Glassmorphism 设计风格。
+ */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import dayjs from 'dayjs'
 
 const props = defineProps<{
-  modelValue: string
-  placeholder?: string
-  required?: boolean
-  disabled?: boolean
+  modelValue: string    // 绑定的日期字符串 (YYYY-MM-DD)
+  placeholder?: string  // 占位符
+  required?: boolean    // 是否必填
+  disabled?: boolean    // 是否禁用
 }>()
 
 const emit = defineEmits<{
@@ -16,10 +22,10 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const wrapperRef = ref<HTMLElement | null>(null)
 
-// Current view date (for the calendar grid)
+// 当前视图日期 (用于控制日历面板显示的月份)
 const viewDate = ref(dayjs())
 
-// Initialize viewDate from modelValue if present
+// 监听 modelValue 变化，同步视图日期
 watch(() => props.modelValue, (newVal) => {
   if (newVal) {
     const d = dayjs(newVal)
@@ -27,29 +33,27 @@ watch(() => props.modelValue, (newVal) => {
       viewDate.value = d
     }
   } else {
-      // If cleared, maybe reset viewDate to today? Or keep current?
-      // Keeping current viewDate is usually better UX.
+      // 如果被清空，保持当前视图日期不变，优化体验
       if (!viewDate.value.isValid()) viewDate.value = dayjs()
   }
 }, { immediate: true })
 
 const formattedValue = computed(() => {
   if (!props.modelValue) return ''
-  // Ensure we display correctly
   return dayjs(props.modelValue).format('YYYY-MM-DD')
 })
 
 const year = computed(() => viewDate.value.year())
-const month = computed(() => viewDate.value.month()) // 0-indexed
+const month = computed(() => viewDate.value.month()) // 0-indexed (0=一月)
 
-// Calendar Grid Logic
+// --- 日历网格计算逻辑 ---
 const days = computed(() => {
   const startOfMonth = viewDate.value.startOf('month')
-  const startDayOfWeek = startOfMonth.day() // 0 (Sunday) to 6 (Saturday)
+  const startDayOfWeek = startOfMonth.day() // 0 (周日) 到 6 (周六)
   
   const daysArray = []
   
-  // Previous month days padding
+  // 1. 上个月的剩余日期填充 (补齐开头)
   const prevMonth = viewDate.value.subtract(1, 'month')
   const daysInPrevMonth = prevMonth.daysInMonth()
   for (let i = startDayOfWeek - 1; i >= 0; i--) {
@@ -61,7 +65,7 @@ const days = computed(() => {
     })
   }
   
-  // Current month days
+  // 2. 当前月的所有日期
   const daysInMonth = viewDate.value.daysInMonth()
   const today = dayjs()
   for (let i = 1; i <= daysInMonth; i++) {
@@ -74,7 +78,7 @@ const days = computed(() => {
     })
   }
   
-  // Next month days padding (to fill 6 rows = 42 cells)
+  // 3. 下个月的日期填充 (补齐结尾，确保总共 6 行 42 个单元格)
   const remaining = 42 - daysArray.length
   const nextMonth = viewDate.value.add(1, 'month')
   for (let i = 1; i <= remaining; i++) {

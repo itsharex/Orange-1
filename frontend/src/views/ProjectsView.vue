@@ -1,3 +1,13 @@
+<!--
+ * @file ProjectsView.vue
+ * @description 项目列表视图
+ * 
+ * 主要功能：
+ * 1. 展示项目分页列表
+ * 2. 支持按状态过滤（全部、进行中、已完成等）
+ * 3. 支持关键词搜索
+ * 4. 项目操作（编辑、删除、归档、添加收款）
+ -->
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,7 +32,7 @@ const currentPage = ref(1)
 const pageSize = ref(5)
 const keyword = ref('')
 
-// Filter state
+// 筛选状态
 const activeFilter = ref('all')
 const filters = [
   { key: 'all', label: '全部项目' },
@@ -33,7 +43,7 @@ const filters = [
   { key: 'archived', label: '已归档' },
 ]
 
-// Fetch Projects
+// 获取项目列表
 const fetchProjects = async () => {
   loading.value = true
   try {
@@ -42,7 +52,7 @@ const fetchProjects = async () => {
       page: currentPage.value,
       page_size: pageSize.value,
       keyword: keyword.value,
-      _t: Date.now()
+      _t: Date.now() // 防止缓存
     }
     
     if (activeFilter.value !== 'all') {
@@ -53,7 +63,6 @@ const fetchProjects = async () => {
     if (data.code === 0) {
       projects.value = data.data.list
       totalItems.value = data.data.total
-      // Update pagination info if needed, though usually just total is enough for controls
     }
   } catch (error) {
     console.error('Failed to fetch projects', error)
@@ -89,7 +98,7 @@ const paginationInfo = computed(() => {
   return `显示 ${start}-${end} 条，共 ${totalItems.value} 条`
 })
 
-// Pagination actions
+// 翻页操作
 const nextPage = () => {
   if (currentPage.value < totalPages.value) currentPage.value++
 }
@@ -126,11 +135,12 @@ const formatDate = (dateStr: string) => {
   return dayjs(dateStr).format('YYYY-MM-DD')
 }
 
-// Dropdown & Actions
+// 下拉菜单逻辑 (使用 activeDropdownId 控制显示)
 const activeDropdownId = ref<number | null>(null)
 const dropdownStyle = ref({ top: '0px', left: '0px' })
 const closeTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 
+// 显示下拉菜单，计算位置使其显示在按钮附近
 const showDropdown = (id: number, event: MouseEvent) => {
   if (closeTimeout.value) {
     clearTimeout(closeTimeout.value)
@@ -140,6 +150,7 @@ const showDropdown = (id: number, event: MouseEvent) => {
     activeDropdownId.value = id
     const button = event.currentTarget as HTMLElement
     const rect = button.getBoundingClientRect()
+    // 简单的位置策略：显示在按钮下方，稍微偏左以防溢出
     dropdownStyle.value = {
       top: `${rect.bottom + 4}px`,
       left: `${rect.right - 140}px`,
@@ -147,6 +158,7 @@ const showDropdown = (id: number, event: MouseEvent) => {
   }
 }
 
+// 延迟隐藏下拉菜单，提供更好的用户体验
 const hideDropdownWithDelay = () => {
   if (closeTimeout.value) clearTimeout(closeTimeout.value)
   closeTimeout.value = setTimeout(() => {

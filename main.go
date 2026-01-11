@@ -21,10 +21,9 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Wails uses Go's `embed` package to embed the frontend files into the binary.
-// Any files in the frontend/dist folder will be embedded into the binary and
-// made available to the frontend.
-// See https://pkg.go.dev/embed for more information.
+// Wails 使用 Go 的 `embed` 包将前端构建产物嵌入到二进制文件中。
+// frontend/dist 文件夹中的所有文件都将被嵌入，并可供前端访问。
+// 详见 https://pkg.go.dev/embed 了解更多信息。
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -32,46 +31,45 @@ var assets embed.FS
 func init() {
 }
 
-// createAssetHandler creates a combined handler that:
-// 1. Routes /api/* requests to Gin router
-// 2. Serves static assets from embedded FS
+// createAssetHandler 创建一个组合处理器，用于统一处理 HTTP 请求：
+// 1. 将 /api/* 开头的请求路由到 Gin 框架处理 (后端接口)
+// 2. 将其他请求作为静态资源服务，从嵌入的文件系统中提供前端页面
 func createAssetHandler() http.Handler {
-	// Create Gin router for API endpoints
+	// 创建 Gin 路由器用于处理 API 端点
 	ginRouter := router.NewRouter()
 
-	// Get the embedded frontend assets
+	// 获取嵌入的前端静态资源
 	frontendFS, err := fs.Sub(assets, "frontend/dist")
 	if err != nil {
 		log.Fatal("Failed to create sub filesystem:", err)
 	}
 	staticHandler := http.FileServer(http.FS(frontendFS))
 
-	// Return a combined handler
+	// 返回一个组合的 http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Route API requests to Gin
+		// 如果是 API 请求，转交给 Gin 处理
 		if strings.HasPrefix(r.URL.Path, "/api") {
 			ginRouter.ServeHTTP(w, r)
 			return
 		}
-		// Serve static assets for everything else
+		// 否则作为静态资源处理 (前端页面)
 		staticHandler.ServeHTTP(w, r)
 	})
 }
 
-// main function serves as the application's entry point. It initializes the application, creates a window,
-// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
-// logs any error that might occur.
+// main 是应用程序的入口点。
+// 它负责初始化应用配置、日志、数据库，创建 Wails 应用实例及窗口，并启动主事件循环。
 func main() {
-	// Load configuration
+	// 1. 加载配置信息
 	config.Load()
 
-	// Initialize Logger
+	// 2. 初始化日志系统
 	logger.Setup()
 	defer logger.Sync()
 
 	slog.Info("Application starting...", "version", "v0.1.7")
 
-	// PANIC RECOVERY
+	// 3. 设置全局 Panic 捕获与恢复
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("CRITICAL PANIC", "error", r, "stack", string(debug.Stack()))
@@ -80,14 +78,15 @@ func main() {
 		}
 	}()
 
-	// Initialize JWT Secret
+	// 4. 初始化 JWT 密钥配置
 	jwt.SecretKey = []byte(config.AppConfig.JWTSecret)
 	jwt.TokenExpiry = time.Duration(config.AppConfig.TokenExpiry) * time.Hour
 
-	// Initialize database
+	// 5. 初始化数据库连接
 	slog.Info("Initializing database...")
 	db := database.GetDB()
-	// Auto Migrate
+
+	// 执行数据库自动迁移 (同步表结构)
 	db.AutoMigrate(
 		&models.User{},
 		&models.Project{},
@@ -98,21 +97,21 @@ func main() {
 		&models.UserNotification{},
 	)
 
-	// Seed Initial Data
+	// 播种初始化数据 (如默认用户、字典等)
 	if err := database.Seed(db); err != nil {
 		slog.Error("Failed to seed database", "error", err)
 	}
 
 	defer database.Close()
 
-	// Create combined asset handler
+	// 6. 创建组合资源处理器 (API + 前端静态资源)
 	assetHandler := createAssetHandler()
 
-	// Create a new Wails application by providing the necessary options.
-	// Variables 'Name' and 'Description' are for application metadata.
-	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
-	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
-	// 'Mac' options tailor the application when running an macOS.
+	// 7. 创建 Wails 应用程序实例
+	// 配置项说明:
+	// - Name & Description: 应用元数据
+	// - Assets: 配置静态资源服务，Handler 指向我们的组合处理器
+	// - Mac: macOS 特定配置，如关闭最后一个窗口后是否退出应用
 	app := application.New(application.Options{
 		Name:        "Orange",
 		Description: "FruitsAI Orange Desktop App",
@@ -124,11 +123,12 @@ func main() {
 		},
 	})
 
-	// Create a new window with the necessary options.
-	// 'Title' is the title of the window.
-	// 'Mac' options tailor the window when running on macOS.
-	// 'BackgroundColour' is the background colour of the window.
-	// 'URL' is the URL that will be loaded into the webview.
+	// 8. 创建主窗口
+	// 配置项说明:
+	// - Width/Height: 初始窗口大小
+	// - Mac: macOS 窗口特定样式 (隐藏标题栏、半透明背景模糊等)
+	// - BackgroundColour: 窗口背景色 (深色模式适配)
+	// - URL: 默认加载的页面路径
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:  "Orange",
 		Width:  1280,
@@ -142,10 +142,11 @@ func main() {
 		URL:              "/",
 	})
 
-	// Run the application. This blocks until the application has been exited.
+	// 9. 启动应用程序
+	// Run() 会阻塞当前 goroutine 直到应用退出
 	err := app.Run()
 
-	// If an error occurred while running the application, log it and exit.
+	// 如果运行时发生错误，记录日志并退出
 	if err != nil {
 		log.Fatal(err)
 	}

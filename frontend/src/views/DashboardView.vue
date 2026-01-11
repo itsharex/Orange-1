@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file DashboardView.vue
+ * @description 应用仪表盘首页
+ * 聚合展示核心业务指标、图表和快捷操作入口。
+ * 负责并行拉取多个 API 数据接口，并组装成 UI 所需的数据结构。
+ */
 import { ref, onMounted, onActivated, computed } from 'vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
 import IncomeChart from '@/components/dashboard/IncomeChart.vue'
@@ -82,7 +88,7 @@ const activePeriod = ref<'week' | 'month' | 'quarter' | 'year'>('month')
 const fetchDashboardData = async () => {
   loading.value = true
   try {
-    // Parallel requests
+    // 并行请求所有数据，提升加载速度
     const [statsRes, trendRes, projectRes, paymentRes] = await Promise.all([
       dashboardApi.getStats(),
       dashboardApi.getIncomeTrend(activePeriod.value),
@@ -105,7 +111,7 @@ const fetchDashboardData = async () => {
 
     if (paymentRes.data.code === 0) {
       upcomingPayments.value = paymentRes.data.data.map((p: Payment) => {
-        // Calculate days left using responsive standard Date math
+        // 使用标准日期计算剩余天数
         const due = new Date(p.plan_date)
         const today = new Date()
         const diffTime = due.getTime() - today.getTime()

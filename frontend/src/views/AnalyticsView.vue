@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file AnalyticsView.vue
+ * @description 数据分析页面
+ * 展示收入趋势、收款结构饼图及核心指标卡片。
+ * 集成了 Chart.js 图表库，并支持导出报表。
+ */
 import { onMounted, ref, watch, onUnmounted, computed } from 'vue'
 import GlassCard from '@/components/common/GlassCard.vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
@@ -6,6 +12,7 @@ import { Chart, registerables } from 'chart.js'
 import { useThemeStore } from '@/stores/theme'
 import { dashboardApi, type DashboardStats } from '@/api/dashboard'
 
+// 注册 Chart.js 组件
 Chart.register(...registerables)
 
 const themeStore = useThemeStore()
@@ -15,6 +22,7 @@ const doughnutChartCanvas = ref<HTMLCanvasElement | null>(null)
 let barChartInstance: Chart | null = null
 let doughnutChartInstance: Chart | null = null
 
+// 统计数据状态
 const stats = ref<DashboardStats>({
   total_amount: 0,
   paid_amount: 0,
@@ -28,11 +36,13 @@ const stats = ref<DashboardStats>({
   avg_collection_days_trend: 0,
 })
 
+// 计算收款率 (已收 / 总额)
 const collectionRate = computed(() => {
   if (stats.value.total_amount === 0) return 0
   return ((stats.value.paid_amount / stats.value.total_amount) * 100).toFixed(1)
 })
 
+// 计算逾期率 (逾期 / 总额)
 const overdueRate = computed(() => {
   if (stats.value.total_amount === 0) return 0
   return ((stats.value.overdue_amount / stats.value.total_amount) * 100).toFixed(1)
@@ -50,11 +60,14 @@ const fetchStats = async () => {
   }
 }
 
-
+// 默认统计周期
 const activePeriod = ref<'week' | 'month' | 'quarter' | 'year'>('month')
 
 const periods = ['week', 'month', 'quarter', 'year'] as const
 
+/**
+ * 切换统计周期并刷新数据
+ */
 const changePeriod = async (period: 'week' | 'month' | 'quarter' | 'year') => {
   activePeriod.value = period
   await Promise.all([fetchStats(), fetchCharts()])

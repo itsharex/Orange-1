@@ -1,32 +1,37 @@
+/**
+ * @file api/auth.ts
+ * @description 用户认证相关 API
+ * 包含登录、注册、注销、密码修改及用户信息管理接口。
+ */
 import api, { type ApiResponse } from './index'
 
-// 用户类型
+// 用户类型定义
 export interface User {
   id: number
-  username: string
-  name: string
-  email: string
-  phone: string
-  avatar: string
-  role: string
-  department: string
-  position: string
-  status: number
+  username: string // 用户名
+  name: string     // 真实姓名
+  email: string    // 邮箱
+  phone: string    // 手机号
+  avatar: string   // 头像 URL
+  role: string     // 角色 (admin/user)
+  department: string // 部门
+  position: string   // 职位
+  status: number     // 状态 (1:正常, 0:禁用)
 }
 
-// 登录请求
+// 登录请求参数
 export interface LoginRequest {
   username: string
   password: string
 }
 
-// 登录响应
+// 登录响应数据
 export interface LoginResponse {
-  token: string
-  user: User
+  token: string // JWT Token
+  user: User    // 用户信息
 }
 
-// 注册请求
+// 注册请求参数
 export interface RegisterRequest {
   username: string
   name: string
@@ -35,13 +40,13 @@ export interface RegisterRequest {
   password: string
 }
 
-// 修改密码请求
+// 修改密码请求参数
 export interface ChangePasswordRequest {
   old_password: string
   new_password: string
 }
 
-// 更新个人信息请求
+// 更新个人信息请求参数
 export interface UpdateProfileRequest {
   name?: string
   email?: string
@@ -50,7 +55,7 @@ export interface UpdateProfileRequest {
   position?: string
 }
 
-// 认证 API
+// 认证 API 集合
 export const authApi = {
   // 登录
   login: (data: LoginRequest) =>

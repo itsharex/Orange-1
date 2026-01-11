@@ -34,13 +34,17 @@ func (r *ProjectRepository) FindByIDWithPayments(id int64) (*models.Project, err
 	return &project, nil
 }
 
-// List 获取项目列表
+// List 分页查询项目列表
+// 支持按用户ID(数据隔离)、状态、关键词(名称或公司名)进行筛选。
+// Preload("User"): 预加载关联的用户信息。
 func (r *ProjectRepository) List(userID int64, status, keyword string, page, pageSize int) ([]models.Project, int64, error) {
 	var projects []models.Project
 	var total int64
 
+	// 构建基础查询：限定用户，预加载关联
 	query := r.db.Model(&models.Project{}).Preload("User").Where("user_id = ?", userID)
 
+	// 动态条件筛选
 	if status != "" && status != "all" {
 		query = query.Where("status = ?", status)
 	}
@@ -48,8 +52,10 @@ func (r *ProjectRepository) List(userID int64, status, keyword string, page, pag
 		query = query.Where("name LIKE ? OR company LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
+	// 计算总数
 	query.Count(&total)
 
+	// 分页查询，按创建时间倒序
 	offset := (page - 1) * pageSize
 	if err := query.Order("create_time DESC").Offset(offset).Limit(pageSize).Find(&projects).Error; err != nil {
 		return nil, 0, err
@@ -90,19 +96,23 @@ func (r *ProjectRepository) UpdateStatus(id int64, status string) error {
 	return r.db.Model(&models.Project{}).Where("id = ?", id).Update("status", status).Error
 }
 
-// GetStats 获取统计数据
+// GetStats 获取用户维度的项目财务统计
+// 返回:
+//   - totalAmount: 所有项目的总合同金额之和
+//   - paidAmount: 所有实收金额之和 (关联 Payments 表统计)
+//   - pendingAmount: 待收金额 (total - paid)
 func (r *ProjectRepository) GetStats(userID int64) (totalAmount, paidAmount, pendingAmount float64, err error) {
-	// 总金额
+	// 1. 统计总合同金额 (SUM project.total_amount)
 	r.db.Model(&models.Project{}).Where("user_id = ?", userID).
 		Select("COALESCE(SUM(total_amount), 0)").Scan(&totalAmount)
 
-	// 已收金额
+	// 2. 统计已收金额 (关联查询 payment 表中 status='paid' 的记录)
 	r.db.Model(&models.Payment{}).
 		Joins("JOIN projects ON payments.project_id = projects.id").
 		Where("projects.user_id = ? AND payments.status = ?", userID, "paid").
 		Select("COALESCE(SUM(payments.amount), 0)").Scan(&paidAmount)
 
-	// 待收金额
+	// 3. 计算待收金额
 	pendingAmount = totalAmount - paidAmount
 
 	return
@@ -121,7 +131,10 @@ func (r *ProjectRepository) ExistsByContractNumber(userID int64, contractNumber 
 	return count > 0, nil
 }
 
-// GetMaxContractNumberByPrefix 获取指定前缀的最大合同编号（限定用户）
+// GetMaxContractNumberByPrefix 获取指定日期的最大合同编号
+// 用于生成新的合同编号。例如查询 "HT20231001" 前缀的最新编号。
+// 返回:
+//   - maxContractNumber: 存在的最大编号 (如 "HT202310010005")，如果没有则返回空字符串。
 func (r *ProjectRepository) GetMaxContractNumberByPrefix(userID int64, prefix string) (string, error) {
 	var contractNumber string
 	err := r.db.Model(&models.Project{}).

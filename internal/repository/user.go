@@ -34,9 +34,11 @@ func (r *UserRepository) FindByUsername(username string) (*models.User, error) {
 	return &user, nil
 }
 
-// FindByCredential 根据用户名/邮箱/手机号查找用户
+// FindByCredential 根据唯一凭证查找用户
+// 支持通过 用户名(username)、邮箱(email) 或 手机号(phone) 进行统一登录查询。
 func (r *UserRepository) FindByCredential(credential string) (*models.User, error) {
 	var user models.User
+	// 组合 OR 查询条件
 	if err := r.db.Where("username = ? OR email = ? OR phone = ?",
 		credential, credential, credential).First(&user).Error; err != nil {
 		return nil, err
@@ -77,7 +79,9 @@ func (r *UserRepository) Update(user *models.User) error {
 	return r.db.Save(user).Error
 }
 
-// UpdateFields 更新指定字段
+// UpdateFields 动态更新指定字段
+// fields 参数为 map[string]interface{}，仅更新 map 中包含的字段。
+// 适用于部分更新场景（如仅更新头像、仅修改密码）。
 func (r *UserRepository) UpdateFields(id int64, fields map[string]interface{}) error {
 	return r.db.Model(&models.User{}).Where("id = ?", id).Updates(fields).Error
 }

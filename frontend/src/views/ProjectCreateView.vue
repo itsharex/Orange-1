@@ -1,3 +1,14 @@
+<!--
+ * @file ProjectCreateView.vue
+ * @description 项目创建/编辑视图
+ * 
+ * 主要功能：
+ * 1. 项目基本信息录入（名称、客户、类型、状态等）
+ * 2. 财务信息录入（合同金额、日期、付款模式）
+ * 3. 自动根据付款模式（一次性/分期）生成收款计划
+ * 4. 支持编辑现有项目及其关联的收款计划
+ * 5. 合同编号自动生成与查重校验
+ -->
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -13,15 +24,15 @@ const route = useRoute()
 const toast = useToast()
 const isEditMode = computed(() => !!route.params.id)
 
-// Unified Interface for Payment Items
+// 统一的款项接口定义
 interface PaymentItem {
-  id?: number       // Optional ID for existing items
-  stage: string     // 款项阶段
-  amount: string    // 金额
-  planDate: string  // 计划日期
-  method: string    // 收款方式
-  status: string    // 状态
-  remark: string    // 备注
+  id?: number       // 现有款项的 ID (编辑模式)
+  stage: string     // 款项阶段 (如：首雪、尾款、进度款)
+  amount: string    // 金额 (使用字符串以方便处理输入)
+  planDate: string  // 计划收款日期
+  method: string    // 收款方式 (如：银行转账)
+  status: string    // 状态 (pending/paid)
+  remark: string    // 备注信息
 }
 
 const formData = ref({
@@ -42,7 +53,7 @@ const formData = ref({
 const loading = ref(false)
 const originalPaymentIds = ref<number[]>([]) // Track original IDs for deletion
 
-// Options State
+// 选项状态 (从字典加载)
 const projectTypeOptions = ref<DictionaryItem[]>([])
 const projectStatusOptions = ref<DictionaryItem[]>([])
 const collectionStageOptions = ref<DictionaryItem[]>([])
@@ -54,6 +65,7 @@ const collectionStatuses = [
 ]
 
 // Methods
+// 获取字典数据
 const fetchDictionaries = async () => {
   try {
     const [typeRes, statusRes, stageRes, methodRes] = await Promise.all([
@@ -65,6 +77,7 @@ const fetchDictionaries = async () => {
     
     if (typeRes.data.code === 0) {
       projectTypeOptions.value = typeRes.data.data || []
+      // 如果没有默认选中值，设置第一个为默认
       if (!formData.value.projectType && projectTypeOptions.value.length > 0) {
         const firstItem = projectTypeOptions.value[0]
         if (firstItem) {
@@ -90,9 +103,10 @@ const fetchDictionaries = async () => {
 }
 
 // Ensure at least one payment item exists
+// 确保至少有一个款项，并根据付款模式保持数据一致性
 const ensurePaymentItems = () => {
   if (formData.value.paymentMethod === '一次性付款') {
-    // Default method to first available or 'bank_transfer'
+    // 默认使用第一个支付方式或 bank_transfer
     let defaultMethod = 'bank_transfer'
     if (collectionMethodOptions.value.length > 0) {
         const first = collectionMethodOptions.value[0]
@@ -101,28 +115,28 @@ const ensurePaymentItems = () => {
     
     const currentItems = formData.value.paymentItems
     if (currentItems.length > 0) {
-        // We have existing items (loaded from DB or user input)
-        // Keep the first one, ensure it conforms to One-Time specs
+        // 如果已有款项 (从 DB 加载或用户已输入)
+        // 保留第一个，强制更新其属性以符合"一次性付款"的要求
         const first = currentItems[0]
         
         if (first) {
-            // Preserve ID!
-            // Update mandatory fields for One-Time
+            // 注意：保留现有 ID 以便更新而非删除重建
+            // 更新强制字段
             first.stage = 'all' 
-            first.amount = formData.value.totalAmount // Ensure sync
+            first.amount = formData.value.totalAmount // 保持金额同步
             if (!first.planDate && formData.value.endDate) {
                  first.planDate = formData.value.endDate
             }
-            // If method is missing, set default
+            // 如果方式为空，设置默认值
             if (!first.method) first.method = defaultMethod
             
-            // Remove extra items if any (One-Time only allows 1)
+            // 移除多余的款项 (一次性付款只能有一个)
             if (currentItems.length > 1) {
                  formData.value.paymentItems = [first]
             }
         }
     } else {
-        // No items, create fresh
+        // 无款项，创建全新的默认款项
         formData.value.paymentItems = [{
             stage: 'all', 
             amount: formData.value.totalAmount,
@@ -133,7 +147,7 @@ const ensurePaymentItems = () => {
         }]
     }
   } else {
-    // Installments mode: Ensure at least one if empty
+    // 分期付款模式：如果为空则添加默认第一期
     if (formData.value.paymentItems.length === 0) {
       addPaymentItem()
     } else {
@@ -148,9 +162,11 @@ const ensurePaymentItems = () => {
 }
 
 // Watchers
+// 监听器：当支付模式改变时，重新调整款项列表
 watch(() => formData.value.paymentMethod, ensurePaymentItems)
 
 // Watch when dictionaries are loaded to update defaults if needed
+// 当字典加载完成后，如果当前是一次性付款且没有付款方式，设置默认值
 watch(collectionMethodOptions, (newVal) => {
     if (formData.value.paymentMethod === '一次性付款' && formData.value.paymentItems.length > 0 && newVal && newVal.length > 0) {
          const firstItem = formData.value.paymentItems[0]
@@ -164,6 +180,7 @@ watch(collectionMethodOptions, (newVal) => {
 })
 
 
+// 监听总金额变化，同步更新一次性付款的金额
 watch(() => formData.value.totalAmount, (newVal) => {
   if (formData.value.paymentMethod === '一次性付款' && formData.value.paymentItems.length > 0) {
     const firstItem = formData.value.paymentItems[0]
@@ -233,10 +250,11 @@ const handleCancel = () => {
   router.back()
 }
 
+// 获取项目及其款项数据 (编辑模式)
 const fetchProjectData = async (id: number) => {
   try {
     loading.value = true
-    // 1. Get Project Details
+    // 1. 获取项目基本信息
     const { data } = await projectApi.get(id)
     if (data.code === 0 && data.data) {
       const p = data.data
@@ -255,10 +273,11 @@ const fetchProjectData = async (id: number) => {
         description: p.description,
       }
       
-      // 2. Get Existing Payments
+      // 2. 获取现有款项列表
       const payRes = await projectApi.getPayments(id)
       if (payRes.data.code === 0 && payRes.data.data) {
           const payments = payRes.data.data
+          // 记录原始 ID 以便后续判断删除
           originalPaymentIds.value = payments.map((p) => p.id)
           formData.value.paymentItems = payments.map(p => ({
               id: p.id,
@@ -271,7 +290,7 @@ const fetchProjectData = async (id: number) => {
           }))
       }
       
-      ensurePaymentItems() // Corrects list if empty or mismatches One-Time logic
+      ensurePaymentItems() // 如果为空或不符合逻辑，进行修正
     }
   } catch (e) {
     console.error(e)
@@ -281,12 +300,13 @@ const fetchProjectData = async (id: number) => {
   }
 }
 
+// 保存款项信息（处理增删改）
 const savePayments = async (projectId: number) => {
-    // 1. Identify IDs to delete
+    // 1. 识别需要删除的 ID
     const currentIds = new Set(formData.value.paymentItems.map(i => i.id).filter(id => id !== undefined) as number[])
     const toDelete = originalPaymentIds.value.filter(id => !currentIds.has(id))
     
-    // 2. Execute Deletions
+    // 2. 执行删除操作
     for (const id of toDelete) {
         try {
             await paymentApi.delete(id)
@@ -296,16 +316,15 @@ const savePayments = async (projectId: number) => {
         }
     }
 
-    // 3. Create or Update
+    // 3. 执行创建或更新操作
     for (const item of formData.value.paymentItems) {
         if (!item.amount || !item.planDate) continue 
-        // Skip incomplete items? Or maybe validated before?
         
         const payload: PaymentRequest = {
             project_id: projectId,
             stage: item.stage || '款项',
             amount: parseFloat(item.amount) || 0,
-            plan_date: item.planDate, // Must match API Interface
+            plan_date: item.planDate, // 必须符合 API 格式
             status: item.status || 'pending',
             method: item.method || 'bank_transfer',
             remark: item.remark

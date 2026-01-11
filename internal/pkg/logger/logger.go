@@ -11,42 +11,43 @@ import (
 )
 
 var (
-	// Log is the global Zap logger
-	Log  *zap.Logger
+	// Log 是全局的 Zap Logger 实例，供需要高性能日志的场景使用
+	Log *zap.Logger
+	// once 保证日志初始化只执行一次
 	once sync.Once
 )
 
-// Setup initializes the logger
+// Setup 初始化全局日志系统
+// 集成了 zap (高吞吐结构化日志)、lumberjack (日志轮转) 和 go 标准库 slog。
 func Setup() {
 	once.Do(func() {
-		// Ensure log path is configured
+		// 1. 获取日志文件路径配置
 		logPath := config.AppConfig.LogPath
 		if logPath == "" {
-			logPath = "orange.log"
+			logPath = "orange.log" // 默认文件名
 		}
 
-		// Configure Lumberjack for log rotation
+		// 2. 配置 Lumberjack 进行日志轮转 (Log Rotation)
+		// 防止单个日志文件过大占满磁盘
 		rotator := &lumberjack.Logger{
 			Filename:   logPath,
-			MaxSize:    config.AppConfig.LogMaxSize, // MB
-			MaxBackups: config.AppConfig.LogMaxBackups,
-			MaxAge:     config.AppConfig.LogMaxAge, // Days
-			Compress:   config.AppConfig.LogCompress,
+			MaxSize:    config.AppConfig.LogMaxSize,    // 单个文件最大尺寸 (MB)
+			MaxBackups: config.AppConfig.LogMaxBackups, // 保留旧文件最大个数
+			MaxAge:     config.AppConfig.LogMaxAge,     // 保留旧文件最大天数
+			Compress:   config.AppConfig.LogCompress,   // 是否压缩旧日志
 		}
 
-		// Configure Zap Encoder
+		// 3. 配置 Zap 编码器 (JSON 格式)
 		encoderConfig := zap.NewProductionEncoderConfig()
-		encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+		encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder // 时间格式: 2023-01-01T12:00:00.000Z
 		encoderConfig.TimeKey = "time"
 
-		// Create Zap Core
-		// Write to both file (rotator) and stdout if in debug mode?
-		// User requested "output logs to file". Windows GUI apps don't have stdout usually.
-		// So writing to rotator is primary.
-
+		// 4. 创建 Zap Core
+		// 将日志输出指向 rotator (文件写入器)
 		var core zapcore.Core
 		fileSyncer := zapcore.AddSync(rotator)
 
+		// 根据配置设置日志级别
 		level := zap.InfoLevel
 		if config.AppConfig.LogLevel == "debug" {
 			level = zap.DebugLevel
@@ -58,23 +59,20 @@ func Setup() {
 			level,
 		)
 
-		// Initialize Zap Logger
+		// 5. 初始化 Zap Logger
+		// AddCaller: 记录调用日志的文件名和行号
 		Log = zap.New(core, zap.AddCaller())
 
-		// Redirect standard slog to use the same rotator
-		// This ensures existing slog.Info() calls in the app are captured in the log file
-		// matching the JSON format as closely as possible.
+		// 6. 重定向标准库 slog 到 zap 的 rotator
+		// 这样应用中所有使用 slog.Info/Error 的地方也会写入同一个日志文件。
 		slogHandler := slog.NewJSONHandler(rotator, &slog.HandlerOptions{
 			Level: slogLevel(config.AppConfig.LogLevel),
 		})
 		slog.SetDefault(slog.New(slogHandler))
-
-		// Also redirect standard log package to this writer
-		// log.SetOutput(rotator) // specific to standard log
 	})
 }
 
-// slogLevel converts string level to slog.Level
+// slogLevel 将配置字符串转换为 slog.Level 枚举
 func slogLevel(level string) slog.Level {
 	switch level {
 	case "debug":
@@ -90,7 +88,8 @@ func slogLevel(level string) slog.Level {
 	}
 }
 
-// Sync flushes any buffered log entries
+// Sync 刷新缓冲区，确保所有日志写入磁盘
+// 通常在 main 函数退出前调用: defer logger.Sync()
 func Sync() {
 	if Log != nil {
 		_ = Log.Sync()

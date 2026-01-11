@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file ConfirmModal.vue
+ * @description 通用确认模态框
+ * 通过 expose 的 open 方法调用，返回 Promise<boolean> 结果。
+ * 通常配合 useConfirm hook 使用。
+ */
 import { ref } from 'vue'
 
 const visible = ref(false)
@@ -6,6 +12,11 @@ const title = ref('确认')
 const message = ref('')
 const resolvePromise = ref<((value: boolean) => void) | null>(null)
 
+/**
+ * 打开模态框
+ * @param options 配置项 (标题，消息)
+ * @returns Promise<boolean> 用户点击确认返回 true, 取消或点击遮罩返回 false
+ */
 const open = (options: { title?: string; message: string }) => {
   title.value = options.title || '确认'
   message.value = options.message

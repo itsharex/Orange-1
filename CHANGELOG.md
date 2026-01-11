@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9] - 2026-01-11
+
+### Changed
+
+- **Documentation**: Comprehensive addition of Chinese comments across the entire frontend codebase (Views, Components, Stores, APIs) to improve maintainability and code readability.
+- **Documentation**: Added detailed comments to `main.go` and `scripts/bump_version.go` to explain application initialization and release processes.
+
 ## [0.1.8] - 2026-01-11
 
 ### Fixed

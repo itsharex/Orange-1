@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file PaymentCreateView.vue
+ * @description 创建/编辑收款计划页面
+ * 支持为特定项目添加一次性或分期付款计划。
+ * 包含复杂的表单逻辑，如项目选择、字典数据加载、动态增删分期项。
+ */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import GlassCard from '@/components/common/GlassCard.vue'
@@ -118,26 +124,25 @@ const fetchProjectData = async (projectId: number) => {
 const ensurePaymentItems = () => {
     if (!currentProject.value) return
 
-    // If One-time payment, ensure exactly one item exists
+    // 如果是一次性付款，确保只有一项
     if (currentProject.value.payment_method === '一次性付款') {
          if (paymentItems.value.length === 0) {
-            // New item
+            // 没有则新建
             addPaymentItem()
          } else if (paymentItems.value.length > 1) {
-             // Keep only the first one (edge case cleanup)
+             // 如果有多项，只保留第一项 (数据清洗)
              const first = paymentItems.value[0]
              if (first) {
                  paymentItems.value = [first]
              }
          }
          
-         // Force stage to 'all'
+         // 强制设置阶段为 'all'
          if (paymentItems.value[0]) {
              paymentItems.value[0].stage = 'all'
          }
     } else {
-        // Installment: If empty, maybe add one? Or leave empty. 
-        // ProjectCreateView logic: if empty, adds one. Let's start with one if empty.
+        // 分期付款：如果是新的空记录，默认添加一项
         if (paymentItems.value.length === 0) {
             addPaymentItem()
         }

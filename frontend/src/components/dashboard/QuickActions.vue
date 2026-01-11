@@ -1,9 +1,18 @@
 <script setup lang="ts">
+/**
+ * @file QuickActions.vue
+ * @description 仪表盘快捷操作组件
+ * 提供常用功能的快速入口 (如新建项目、添加收款等)。
+ */
 import GlassCard from '@/components/common/GlassCard.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
+/**
+ * 处理快捷操作点击
+ * @param name 操作名称
+ */
 const handleAction = (name: string) => {
   if (name === '新建项目') {
     router.push('/projects/create')
@@ -16,6 +25,7 @@ const handleAction = (name: string) => {
   }
 }
 
+// 快捷操作配置列表
 const actions = [
   {
     name: '新建项目',

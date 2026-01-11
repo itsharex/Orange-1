@@ -9,44 +9,54 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// NotificationHandler 通知处理器
+// NotificationHandler 通知消息模块处理器
+// 负责处理通知的创建、查询、状态更新及删除等操作。
 type NotificationHandler struct {
 	notificationService *service.NotificationService
 }
 
-// NewNotificationHandler 创建通知处理器
+// NewNotificationHandler 创建通知处理器实例
 func NewNotificationHandler() *NotificationHandler {
 	return &NotificationHandler{
 		notificationService: service.NewNotificationService(),
 	}
 }
 
-// CreateRequest 创建通知请求
+// CreateRequest 创建通知请求参数
 type CreateNotificationRequest struct {
-	Title        string `json:"title" binding:"required"`
-	Content      string `json:"content" binding:"required"`
-	Type         string `json:"type"`
-	TargetUserID int64  `json:"target_user_id"` // 0 = 全员通知
+	Title        string `json:"title" binding:"required"`   // 标题
+	Content      string `json:"content" binding:"required"` // 内容
+	Type         string `json:"type"`                       // 类型: system, activity, private
+	TargetUserID int64  `json:"target_user_id"`             // 目标用户ID (0 = 全员通知)
 }
 
-// Create 创建通知（仅管理员）
-// POST /api/v1/notifications
+// Create 发布新通知
+// @Summary 发布通知
+// @Description 管理员发布新通知，支持全员或指定用户
+// @Tags Notification
+// @Security Bearer
+// @Param notification body CreateNotificationRequest true "通知内容"
+// @Success 200 {object} models.Notification
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/notifications [post]
 func (h *NotificationHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	role := c.GetString("role")
 
-	// 检查权限
+	// 1. 权限校验
 	if role != "admin" {
 		response.Forbidden(c)
 		return
 	}
 
+	// 2. 参数绑定
 	var req CreateNotificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ParamError(c, err.Error())
 		return
 	}
 
+	// 3. 调用服务层
 	notification, err := h.notificationService.Create(userID, req.Title, req.Content, req.Type, req.TargetUserID)
 	if err != nil {
 		response.InternalError(c, err.Error())
@@ -56,12 +66,20 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 	response.Success(c, notification)
 }
 
-// Update 更新通知（仅管理员）
-// PUT /api/v1/notifications/:id
+// Update 更新通知内容
+// @Summary 更新通知
+// @Description 修改现有通知的标题、内容等信息(仅限管理员)
+// @Tags Notification
+// @Security Bearer
+// @Param id path int true "通知ID"
+// @Param notification body CreateNotificationRequest true "更新内容"
+// @Success 200 {object} models.Notification
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/notifications/{id} [put]
 func (h *NotificationHandler) Update(c *gin.Context) {
 	role := c.GetString("role")
 
-	// 检查权限
+	// 1. 权限校验
 	if role != "admin" {
 		response.Forbidden(c)
 		return
@@ -73,12 +91,14 @@ func (h *NotificationHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// 2. 参数绑定
 	var req CreateNotificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ParamError(c, err.Error())
 		return
 	}
 
+	// 3. 执行更新
 	notification, err := h.notificationService.Update(id, req.Title, req.Content, req.Type, req.TargetUserID)
 	if err != nil {
 		response.InternalError(c, err.Error())
@@ -88,8 +108,15 @@ func (h *NotificationHandler) Update(c *gin.Context) {
 	response.Success(c, notification)
 }
 
-// List 获取通知列表
-// GET /api/v1/notifications?page=1&page_size=10
+// List 获取我的通知列表
+// @Summary 获取通知列表
+// @Description 分页获取当前用户的通知（含系统全员通知和私信）
+// @Tags Notification
+// @Security Bearer
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Success 200 {object} response.PageResult
+// @Router /api/v1/notifications [get]
 func (h *NotificationHandler) List(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -111,8 +138,14 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	response.SuccessPage(c, notifications, total, page, pageSize)
 }
 
-// MarkAsRead 标记为已读
-// PUT /api/v1/notifications/:id/read
+// MarkAsRead 标记通知为已读
+// @Summary 标记已读
+// @Description 将指定通知标记为当前用户已读
+// @Tags Notification
+// @Security Bearer
+// @Param id path int true "通知ID"
+// @Success 200 {string} string "操作成功"
+// @Router /api/v1/notifications/{id}/read [put]
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -129,12 +162,19 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	response.SuccessWithMessage(c, "已标记为已读", nil)
 }
 
-// Delete 删除通知（仅管理员）
-// DELETE /api/v1/notifications/:id
+// Delete 删除通知
+// @Summary 删除通知
+// @Description 管理员删除指定通知
+// @Tags Notification
+// @Security Bearer
+// @Param id path int true "通知ID"
+// @Success 200 {string} string "删除成功"
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/notifications/{id} [delete]
 func (h *NotificationHandler) Delete(c *gin.Context) {
 	role := c.GetString("role")
 
-	// 检查权限
+	// 1. 权限校验
 	if role != "admin" {
 		response.Forbidden(c)
 		return
@@ -154,8 +194,13 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 	response.SuccessWithMessage(c, "删除成功", nil)
 }
 
-// UnreadCount 获取未读通知数量
-// GET /api/v1/notifications/unread-count
+// UnreadCount 获取未读数量
+// @Summary 未读通知数
+// @Description 获取当前用户的未读通知总数
+// @Tags Notification
+// @Security Bearer
+// @Success 200 {object} map[string]int64
+// @Router /api/v1/notifications/unread-count [get]
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
@@ -168,12 +213,18 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 	response.Success(c, gin.H{"count": count})
 }
 
-// ListUsers 获取用户列表（用于选择发送目标）
-// GET /api/v1/notifications/users
+// ListUsers 获取可选用户列表
+// @Summary 获取用户列表
+// @Description 获取所有用户列表，用于发送通知时选择目标(仅限管理员)
+// @Tags Notification
+// @Security Bearer
+// @Success 200 {array} models.User
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/notifications/users [get]
 func (h *NotificationHandler) ListUsers(c *gin.Context) {
 	role := c.GetString("role")
 
-	// 检查权限
+	// 权限校验
 	if role != "admin" {
 		response.Forbidden(c)
 		return
@@ -188,8 +239,14 @@ func (h *NotificationHandler) ListUsers(c *gin.Context) {
 	response.Success(c, users)
 }
 
-// Get 获取单个通知
-// GET /api/v1/notifications/:id
+// Get 获取通知详情
+// @Summary 通知详情
+// @Description 根据ID获取通知详细信息
+// @Tags Notification
+// @Security Bearer
+// @Param id path int true "通知ID"
+// @Success 200 {object} models.Notification
+// @Router /api/v1/notifications/{id} [get]
 func (h *NotificationHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

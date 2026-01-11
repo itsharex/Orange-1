@@ -1,32 +1,37 @@
+/**
+ * @file api/dictionary.ts
+ * @description 数据字典管理 API
+ * 用于管理系统中的枚举值，如项目类型、支付阶段等。
+ */
 import api, { type ApiResponse } from './index'
 
-// 字典类型
+// 字典定义
 export interface Dictionary {
   id: number
-  code: string
-  name: string
-  status: number
-  remark: string
+  code: string   // 字典编码 (唯一标识)
+  name: string   // 字典名称
+  status: number // 状态
+  remark: string // 备注
 }
 
-// 字典项类型
+// 字典项定义
 export interface DictionaryItem {
   id: number
-  dictionary_id: number
-  label: string
-  value: string
-  sort: number
-  status: number
+  dictionary_id: number // 所属字典 ID
+  label: string         // 显示名称
+  value: string         // 实际值
+  sort: number          // 排序 (越小越靠前)
+  status: number        // 状态
 }
 
-// 创建字典项请求
+// 创建/修改字典项请求参数
 export interface CreateDictionaryItemRequest {
   label: string
   value: string
   sort?: number
 }
 
-// 字典 API
+// 字典 API 集合
 export const dictionaryApi = {
   // 获取字典列表
   list: () =>

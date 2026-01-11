@@ -9,25 +9,30 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config 应用配置
+// Config 应用全局配置结构体
+// 包含数据库、安全、日志及第三方服务的所有配置项。
 type Config struct {
-	DBPath        string
-	JWTSecret     string
-	TokenExpiry   int64 // 单位：小时
-	LogEnable     bool
-	LogLevel      string
-	GitHubRepo    string
-	LogPath       string
-	LogMaxSize    int
-	LogMaxBackups int
-	LogMaxAge     int
-	LogCompress   bool
+	DBPath        string // 数据库文件存储路径
+	JWTSecret     string // JWT 签名密钥
+	TokenExpiry   int64  // Token 有效期 (单位: 小时)
+	LogEnable     bool   // 是否启用请求日志
+	LogLevel      string // 日志级别: debug, info, warn, error
+	GitHubRepo    string // 用于检查更新的 GitHub 仓库地址 (格式: owner/repo)
+	LogPath       string // 日志文件输出路径
+	LogMaxSize    int    // 单个日志文件最大大小 (MB)
+	LogMaxBackups int    // 保留旧日志文件的最大个数
+	LogMaxAge     int    // 保留旧日志文件的最大天数
+	LogCompress   bool   // 是否压缩旧日志文件
 }
 
 // AppConfig 全局配置实例
 var AppConfig *Config
 
-// Load 加载配置
+// Load 初始化并加载应用配置
+// 加载优先级: 环境变量 > .env 文件 > 系统默认值
+// 默认值逻辑:
+// - 数据库路径: macOS (~/Library/Application Support/FruitsAI/Orange/orange.db), Windows (%APPDATA%/FruitsAI/Orange/orange.db)
+// - 日志路径: 同上，位于 log 子目录下
 func Load() {
 	// 尝试加载 .env 文件，如果不存在则忽略错误（使用默认值或环境变量）
 	err := godotenv.Load()
@@ -39,6 +44,7 @@ func Load() {
 	defaultDBPath := "orange.db"
 	defaultLogPath := "orange.log"
 
+	// 获取用户配置目录 (User Config Directory)
 	configDir, err := os.UserConfigDir()
 	if err == nil {
 		// macOS: ~/Library/Application Support/FruitsAI/Orange
@@ -61,6 +67,7 @@ func Load() {
 		log.Printf("Warning: Failed to get user config dir: %v\n", err)
 	}
 
+	// 组装配置对象，优先从环境变量读取
 	AppConfig = &Config{
 		DBPath:        getEnv("DB_PATH", defaultDBPath),
 		JWTSecret:     getEnv("JWT_SECRET", "orange-secret-key-change-in-production"),

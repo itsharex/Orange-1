@@ -12,11 +12,18 @@ import (
 )
 
 // AuthService 认证服务
+// 负责处理用户登录、注册、密码管理及当前用户信息获取等安全相关业务。
+//
+// 依赖:
+//   - UserRepository: 用户数据操作接口
 type AuthService struct {
 	userRepo *repository.UserRepository
 }
 
-// NewAuthService 创建认证服务
+// NewAuthService 创建认证服务实例
+//
+// 返回:
+//   - *AuthService: 初始化的服务实例
 func NewAuthService() *AuthService {
 	return &AuthService{
 		userRepo: repository.NewUserRepository(),
@@ -24,30 +31,40 @@ func NewAuthService() *AuthService {
 }
 
 // Login 用户登录
+// 验证用户名和密码，成功后颁发 JWT Token 并更新最后登录时间。
+//
+// 参数:
+//   - username: 用户名
+//   - pwd: 密码 (明文)
+//
+// 返回:
+//   - *dto.LoginResult: 包含 Token 和用户信息的结构体
+//   - error: 认证失败（用户名/密码错误或账户被禁用）
 func (s *AuthService) Login(username, pwd string) (*dto.LoginResult, error) {
-	// 查找用户
+	// 1. 查找用户
 	user, err := s.userRepo.FindByCredential(username)
 	if err != nil {
 		return nil, errors.New("用户名或密码错误")
 	}
 
-	// 验证密码
+	// 2. 验证密码 (比对哈希)
 	if !password.CheckPassword(pwd, user.Password) {
 		return nil, errors.New("用户名或密码错误")
 	}
 
-	// 检查用户状态
+	// 3. 检查账户状态
 	if user.Status != 1 {
 		return nil, errors.New("账户已被禁用")
 	}
 
-	// 生成 Token
+	// 4. 生成 JWT Token
+	// Payload 包含: ID, Username, Role
 	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, errors.New("生成Token失败")
 	}
 
-	// 更新最后登录时间
+	// 5. 异步更新最后登录时间 (非关键路径，暂同步执行，可优化)
 	now := time.Now()
 	s.userRepo.UpdateFields(user.ID, map[string]interface{}{
 		"last_login_time": now,
@@ -57,42 +74,58 @@ func (s *AuthService) Login(username, pwd string) (*dto.LoginResult, error) {
 }
 
 // Register 用户注册
+// 创建新用户账号，检查用户名和邮箱唯一性，并对密码进行加密存储。
+//
+// 参数:
+//   - input: 注册请求DTO
+//
+// 返回:
+//   - error: 注册失败（如信息已存在或加密失败）
 func (s *AuthService) Register(input dto.RegisterRequest) error {
-	// 检查用户名是否已存在
+	// 1. 唯一性检查
 	if s.userRepo.ExistsByUsername(input.Username) {
 		return errors.New("用户名已被注册")
 	}
-
-	// 如果提供了邮箱，检查邮箱是否已存在
 	if input.Email != "" && s.userRepo.ExistsByEmail(input.Email) {
 		return errors.New("邮箱已被注册")
 	}
 
-	// 密码加密
+	// 2. 密码加密 (Bcrypt)
 	hashedPassword, err := password.HashPassword(input.Password)
 	if err != nil {
 		return errors.New("密码加密失败")
 	}
 
+	// 3. 构建用户实体
 	user := &models.User{
 		Username: input.Username,
 		Name:     input.Name,
 		Email:    input.Email,
 		Phone:    input.Phone,
 		Password: hashedPassword,
-		Role:     "user",
-		Status:   1,
+		Role:     "user", // 默认为普通用户
+		Status:   1,      // 默认启用
 	}
 
+	// 4. 保存至数据库
 	return s.userRepo.Create(user)
 }
 
-// GetCurrentUser 获取当前用户
+// GetCurrentUser 获取当前登录用户详情
 func (s *AuthService) GetCurrentUser(userID int64) (*models.User, error) {
 	return s.userRepo.FindByID(userID)
 }
 
-// UpdateProfile 更新个人信息
+// UpdateProfile 更新个人资料
+// 支持部分更新（Name, Email, Phone, Department, Position）。
+//
+// 参数:
+//   - userID: 用户ID
+//   - name, email...: 待更新字段，为空则不更新
+//
+// 返回:
+//   - *models.User: 更新后的用户实体
+//   - error: 数据库错误
 func (s *AuthService) UpdateProfile(userID int64, name, email, phone, department, position string) (*models.User, error) {
 	updates := map[string]interface{}{}
 
@@ -122,23 +155,33 @@ func (s *AuthService) UpdateProfile(userID int64, name, email, phone, department
 }
 
 // ChangePassword 修改密码
+// 验证旧密码正确性后，更新为新密码（加密存储）。
+//
+// 参数:
+//   - userID: 用户ID
+//   - oldPassword: 旧密码
+//   - newPassword: 新密码
+//
+// 返回:
+//   - error: 验证失败或更新错误
 func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword string) error {
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
 		return errors.New("用户不存在")
 	}
 
-	// 验证旧密码
+	// 1. 验证旧密码
 	if !password.CheckPassword(oldPassword, user.Password) {
 		return errors.New("原密码错误")
 	}
 
-	// 加密新密码
+	// 2. 加密新密码
 	hashedPassword, err := password.HashPassword(newPassword)
 	if err != nil {
 		return errors.New("密码加密失败")
 	}
 
+	// 3. 更新数据库
 	return s.userRepo.UpdateFields(userID, map[string]interface{}{
 		"password": hashedPassword,
 	})

@@ -1,3 +1,8 @@
+/**
+ * @file main.ts
+ * @description 前端应用入口文件
+ * 用于初始化 Vue 应用实例，配置 Pinia 状态管理、Vue Router 路由，及全局样式和拦截器。
+ */
 import './assets/liquid-glass.css'
 import './assets/main.css'
 import 'remixicon/fonts/remixicon.css'
@@ -10,16 +15,21 @@ import router from './router'
 import { setAuthLogout } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
+// 创建 Vue 应用实例
 const app = createApp(App)
 
+// 注册 Pinia 状态管理插件
 app.use(createPinia())
+// 注册 Router 路由插件
 app.use(router)
 
 // 设置 API 登出回调
+// 当后端返回 401 Unauthorized 时，会自动调用此回调清理本地状态并跳转登录页
 setAuthLogout(() => {
   const authStore = useAuthStore()
   authStore.logout()
   router.push('/login')
 })
 
+// 挂载应用到 DOM
 app.mount('#app')

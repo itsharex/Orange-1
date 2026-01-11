@@ -7,7 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// Seed populates the database with initial data
+// Seed 填充数据库初始数据
+// 该函数在应用启动且数据库表为空时执行，用于预置管理员账号、字典数据等。
+// 类似于 Rails 的 db:seed 或 Laravel 的 seeder。
 func Seed(db *gorm.DB) error {
 	var count int64
 	if err := db.Model(&models.User{}).Count(&count).Error; err != nil {
@@ -21,8 +23,11 @@ func Seed(db *gorm.DB) error {
 	slog.Info("Seeding database...")
 
 	return db.Transaction(func(tx *gorm.DB) error {
-		// Users
-		// Note: mirroring db/seed_users.sql
+		// 1. 初始化用户数据 (Users)
+		// 对应 SQL 文件: db/seed_users.sql
+		// 包含:
+		// - 默认管理员 (admin / 123456)
+		// - 演示用户 (xu)
 		usersSQL := []string{
 			`INSERT INTO users (id, username, password, name, email, phone, role, department, position, status, create_time) VALUES 
 (1, 'admin', '$2a$10$sp/NLWYRQjt9zVCq6HeOieFaFNBl79RoBXdePqxg9UhwQyT1/C7vu', '管理员', 'admin@orange.com', '13800000000', 'admin', '技术部', '系统管理员', 1, CURRENT_TIMESTAMP);`,
@@ -36,8 +41,9 @@ func Seed(db *gorm.DB) error {
 			}
 		}
 
-		// Dictionaries
-		// Note: mirroring db/seed_dictionaries.sql
+		// 2. 初始化字典数据 (Dictionaries)
+		// 对应 SQL 文件: db/seed_dictionaries.sql
+		// 包含: 款项阶段、支付方式、项目状态、项目类型等基础配置
 		dictSQL := []string{
 			// payment_stage
 			`INSERT INTO dictionaries (id, code, name, status, create_time) VALUES (1, 'payment_stage', '款项阶段', 1, CURRENT_TIMESTAMP);`,

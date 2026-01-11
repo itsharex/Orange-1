@@ -47,7 +47,7 @@ func (r *PaymentRepository) ListByProject(projectID int64) ([]models.Payment, er
 	return payments, nil
 }
 
-// ListUpcoming 获取即将到期的收款
+// ListUpcoming 获取指定天数内即将到期待收款项
 func (r *PaymentRepository) ListUpcoming(userID int64, days int, limit int) ([]models.Payment, error) {
 	var payments []models.Payment
 	endDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
@@ -62,7 +62,8 @@ func (r *PaymentRepository) ListUpcoming(userID int64, days int, limit int) ([]m
 	return payments, nil
 }
 
-// ListOverdue 获取逾期收款
+// ListOverdue 获取当前已逾期的待收款项
+// 逾期定义: status="pending" 且 plan_date 小于今天
 func (r *PaymentRepository) ListOverdue(userID int64) ([]models.Payment, error) {
 	var payments []models.Payment
 	today := time.Now().Format("2006-01-02")
@@ -89,7 +90,8 @@ func (r *PaymentRepository) Delete(id int64) error {
 	return r.db.Delete(&models.Payment{}, id).Error
 }
 
-// Confirm 确认收款
+// Confirm 执行确认收款
+// 将状态更新为 'paid' 并记录实际收款信息
 func (r *PaymentRepository) Confirm(id int64, actualDate, method string) error {
 	return r.db.Model(&models.Payment{}).Where("id = ?", id).
 		Updates(map[string]interface{}{
@@ -130,11 +132,16 @@ func (r *PaymentRepository) ListByDateRange(userID int64, startDate, endDate str
 	return payments, nil
 }
 
-// GetIncomeStats 获取收入统计
+// GetIncomeStats 获取收入对比统计 (预期 vs 实际)
+// 分组聚合查询，支持按日或按月统计。
+// 返回:
+//   - expected: map[日期]计划收款金额
+//   - actual: map[日期]实际已收款金额
 func (r *PaymentRepository) GetIncomeStats(userID int64, startDate, endDate, interval string) (map[string]float64, map[string]float64, error) {
 	expected := make(map[string]float64)
 	actual := make(map[string]float64)
 
+	// SQLite 日期格式化语法
 	dateFormat := "%Y-%m-%d"
 	if interval == "month" {
 		dateFormat = "%Y-%m"
@@ -145,7 +152,7 @@ func (r *PaymentRepository) GetIncomeStats(userID int64, startDate, endDate, int
 		Total float64
 	}
 
-	// Expected (plan_date)
+	// 1. 预期收入: 依据 plan_date 统计所有款项
 	var expectedResults []Result
 	if err := r.db.Model(&models.Payment{}).
 		Select("strftime('"+dateFormat+"', plan_date) as date, COALESCE(SUM(amount), 0) as total").
@@ -158,7 +165,7 @@ func (r *PaymentRepository) GetIncomeStats(userID int64, startDate, endDate, int
 		expected[res.Date] = res.Total
 	}
 
-	// Actual (actual_date, status = paid)
+	// 2. 实际收入: 依据 actual_date 统计已完成(paid)的款项
 	var actualResults []Result
 	if err := r.db.Model(&models.Payment{}).
 		Select("strftime('"+dateFormat+"', actual_date) as date, COALESCE(SUM(amount), 0) as total").
@@ -174,52 +181,41 @@ func (r *PaymentRepository) GetIncomeStats(userID int64, startDate, endDate, int
 	return expected, actual, nil
 }
 
-// GetStatsByPeriod 获取指定时间段的统计数据
+// GetStatsByPeriod 获取指定时间周期内的综合指标
+// 返回值:
+//   - totalExpected: 计划在此期间应收总额
+//   - paid: 实际在此期间收到的金额
+//   - pending: 计划在此期间但尚未收到的金额 (包含逾期)
+//   - avgPeriod: 平均回款周期 (天)
 func (r *PaymentRepository) GetStatsByPeriod(userID int64, startDate, endDate string) (total, paid, overdue, avgPeriod float64, err error) {
-	// Total: 计划日期在范围内的总金额 + 已支付且实际日期在范围内的金额（用于显示"总收款金额"）
-	// 但这样会重复计算。更好的设计：
-	// - TotalExpected: 计划日期在范围内的款项总和
-	// - Paid: 实际收到的款项（actual_date 在范围内）
-	// - Pending: 计划日期在范围内但未支付的款项
-	// - Overdue: 计划日期在范围内，已逾期但未支付
-
-	// Total (TotalExpected): 计划日期在范围内的款项
+	// 1. Total (TotalExpected): 计划日期在范围内的款项总和
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND plan_date BETWEEN ? AND ?", userID, startDate, endDate).
 		Select("COALESCE(SUM(amount), 0)").Scan(&total)
 
-	// Paid: 实际日期在范围内已支付的款项
+	// 2. Paid: 实际日期在范围内已支付的款项
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND status = 'paid' AND actual_date BETWEEN ? AND ?", userID, startDate, endDate).
 		Select("COALESCE(SUM(amount), 0)").Scan(&paid)
 
-	// Pending: 计划日期在范围内，状态为 pending 的款项（不是 total - paid）
+	// 3. Pending: 计划日期在范围内，当前状态仍为 pending 的款项
+	//    注意: 这里 pending 包含了 overdue 的部分，只要没付且计划时间在范围内
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND status = 'pending' AND plan_date BETWEEN ? AND ?", userID, startDate, endDate).
-		Select("COALESCE(SUM(amount), 0)").Scan(&overdue) // 临时存到 overdue 变量
-
-	pendingAmount := overdue // 先保存 pending
-
-	// Overdue: 计划日期在范围内，状态为 pending 且已逾期（plan_date < now）
-	now := time.Now().Format("2006-01-02")
-	r.db.Model(&models.Payment{}).
-		Where("user_id = ? AND status = 'pending' AND plan_date BETWEEN ? AND ? AND plan_date < ?", userID, startDate, endDate, now).
 		Select("COALESCE(SUM(amount), 0)").Scan(&overdue)
 
-	// AvgPeriod: Average Collection Days (Actual Date - Plan Date) for items paid in this period
+	pendingAmount := overdue // 复用逻辑：第三个返回参数位置放置待收总额
+
+	// (可选统计) 如果需要单独统计严格逾期(当前时间 > 计划时间)，可开启下行逻辑，但不影响本函数返回值定义
+	// now := time.Now().Format("2006-01-02")
+	// ... WHERE plan_date < now ...
+
+	// 4. AvgPeriod: 平均回款周期 (Actual Date - Plan Date)
+	//    仅统计在此期间实际到账的款项
 	r.db.Model(&models.Payment{}).
 		Where("user_id = ? AND status = 'paid' AND actual_date BETWEEN ? AND ?", userID, startDate, endDate).
 		Select("COALESCE(AVG(julianday(actual_date) - julianday(plan_date)), 0)").Scan(&avgPeriod)
 
-	// 返回时，把 pending 放到第三个返回值位置（原来是 overdue 的位置）
-	// 但这样会破坏调用方的逻辑... 我们需要返回：total, paid, pending(待收), overdue(逾期)
-	// 当前函数只返回 4 个值: total, paid, overdue, avgPeriod
-	// 为了保持向后兼容，pending 应该由调用方计算，但用正确的方式
-
-	// 实际上问题出在第 75 行: currPending := currTotal - currPaid
-	// 这是错误的计算方式！
-
-	// 修正：返回 pending 作为第三个参数（待收款），overdue 另外计算
 	return total, paid, pendingAmount, avgPeriod, nil
 }
 

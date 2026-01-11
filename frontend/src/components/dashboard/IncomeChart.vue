@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file IncomeChart.vue
+ * @description 收入趋势图表组件
+ * 使用 Chart.js 渲染折线图，支持周/月/年维度切换。
+ * 自动适配亮色/暗色主题。
+ */
 import { ref, onMounted, watch, computed } from 'vue'
 import Chart from 'chart.js/auto'
 import type { ChartConfiguration, TooltipItem } from 'chart.js'
@@ -6,15 +12,19 @@ import { useThemeStore } from '@/stores/theme'
 import GlassCard from '@/components/common/GlassCard.vue'
 
 const props = defineProps<{
-  labels: string[]
-  values: number[]
-  modelValue?: string
+  labels: string[]        // X轴标签 (日期)
+  values: number[]        // Y轴数据 (金额)
+  modelValue?: string     // 当前选中的时间维度 (v-model)
 }>()
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
 const currentPeriod = ref(props.modelValue || 'month')
 
+/**
+ * 切换时间维度
+ * @param p 维度标识 ('week' | 'month' | 'year')
+ */
 const setPeriod = (p: string) => {
   currentPeriod.value = p
   emit('update:modelValue', p)
@@ -29,7 +39,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: Chart | null = null
 const themeStore = useThemeStore()
 
-// Re-init chart when theme changes
+// 监听主题变化，重建图表以更新颜色
 watch(() => themeStore.effectiveTheme, () => {
   if (chartInstance) {
     chartInstance.destroy()
@@ -38,6 +48,10 @@ watch(() => themeStore.effectiveTheme, () => {
   initChart()
 })
 
+/**
+ * 初始化图表
+ * 配置 Chart.js 实例，包括渐变背景、坐标轴样式、Tooltip 等
+ */
 function initChart() {
   if (!canvasRef.value) return
 

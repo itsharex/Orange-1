@@ -1,18 +1,23 @@
 <script setup lang="ts">
+/**
+ * @file StatCard.vue
+ * @description 仪表盘统计卡片组件
+ * 展示单个核心指标 (如总收入、项目数)，支持显示趋势变化。
+ */
 import { computed } from 'vue'
 import GlassCard from '@/components/common/GlassCard.vue'
 
 const props = defineProps<{
-  label: string
-  value?: string | number
-  icon: string
-  trend?: string
-  trendValue?: string // For compatibility with AnalyticsView usage intention
-  trendUp?: boolean
-  trendDirection?: 'up' | 'down' // For compatibility
-  iconColorClass?: string
-  variant?: 'primary' | 'success' | 'warning' | 'danger'
-  suffix?: string
+  label: string           // 指标名称
+  value?: string | number // 指标值
+  icon: string            // 图标类名
+  trend?: string          // 趋势文本 (如 "+12%")
+  trendValue?: string     // 兼容性字段 (同 trend)
+  trendUp?: boolean       // 是否为上升趋势 (决定颜色)
+  trendDirection?: 'up' | 'down' // 兼容性字段
+  iconColorClass?: string // 图标颜色样式类
+  variant?: 'primary' | 'success' | 'warning' | 'danger' // 预设主题色
+  suffix?: string         // 数值后缀 (如单位)
 }>()
 
 const computedIconClass = computed(() => {

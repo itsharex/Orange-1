@@ -7,16 +7,17 @@ import (
 )
 
 // DictionaryRepository 字典数据仓库
+// 封装了对 `dictionaries` 和 `dictionary_items` 表的所有数据库操作。
 type DictionaryRepository struct {
 	db *gorm.DB
 }
 
-// NewDictionaryRepository 创建字典仓库
+// NewDictionaryRepository 创建字典仓库实例
 func NewDictionaryRepository() *DictionaryRepository {
 	return &DictionaryRepository{db: database.GetDB()}
 }
 
-// List 获取所有字典
+// List 查询所有启用的字典类型
 func (r *DictionaryRepository) List() ([]models.Dictionary, error) {
 	var dictionaries []models.Dictionary
 	if err := r.db.Where("status = ?", 1).Find(&dictionaries).Error; err != nil {
@@ -25,7 +26,7 @@ func (r *DictionaryRepository) List() ([]models.Dictionary, error) {
 	return dictionaries, nil
 }
 
-// FindByCode 根据编码查找字典
+// FindByCode 根据唯一编码查找字典类型
 func (r *DictionaryRepository) FindByCode(code string) (*models.Dictionary, error) {
 	var dict models.Dictionary
 	if err := r.db.Where("code = ?", code).First(&dict).Error; err != nil {
@@ -34,7 +35,7 @@ func (r *DictionaryRepository) FindByCode(code string) (*models.Dictionary, erro
 	return &dict, nil
 }
 
-// FindItemByID 根据ID查找字典项
+// FindItemByID 根据主键ID查找字典项
 func (r *DictionaryRepository) FindItemByID(id int64) (*models.DictionaryItem, error) {
 	var item models.DictionaryItem
 	if err := r.db.First(&item, id).Error; err != nil {
@@ -43,7 +44,7 @@ func (r *DictionaryRepository) FindItemByID(id int64) (*models.DictionaryItem, e
 	return &item, nil
 }
 
-// GetItems 获取字典项列表
+// GetItems 获取指定字典ID下的所有字典项（按 Sort 升序排列）
 func (r *DictionaryRepository) GetItems(dictID int64) ([]models.DictionaryItem, error) {
 	var items []models.DictionaryItem
 	if err := r.db.Where("dictionary_id = ? AND status = ?", dictID, 1).
@@ -54,7 +55,8 @@ func (r *DictionaryRepository) GetItems(dictID int64) ([]models.DictionaryItem, 
 	return items, nil
 }
 
-// GetItemsByCode 根据字典编码获取字典项
+// GetItemsByCode 根据字典编码直接查找其下的字典项
+// 这是一个便捷方法，内部会先查字典ID再查项。
 func (r *DictionaryRepository) GetItemsByCode(code string) ([]models.DictionaryItem, error) {
 	dict, err := r.FindByCode(code)
 	if err != nil {

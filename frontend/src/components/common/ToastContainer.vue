@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file ToastContainer.vue
+ * @description 全局 Toast 消息容器组件
+ * 负责渲染和管理所有激活状态的 Toast 弹窗队列。
+ * 通过 TransitionGroup 实现列表动画。
+ */
 import { useToast } from '@/composables/useToast'
 
 const { toasts, remove } = useToast()

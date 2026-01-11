@@ -16,21 +16,25 @@ func NewNotificationRepository() *NotificationRepository {
 	return &NotificationRepository{db: database.GetDB()}
 }
 
-// Create 创建通知
+// Create 创建新通知
+//
+// 逻辑说明:
+// 1. 如果是全员通知 (IsGlobal=1)，直接插入 notifications 表。
+// 2. 如果是私信 (IsGlobal=0)，开启事务：
+//   - 插入 notifications 表
+//   - 插入 user_notifications 表，建立用户与通知的关联(Inbox模式)
 func (r *NotificationRepository) Create(notification *models.Notification, targetUserID int64) error {
-	// 如果是全员通知 (IsGlobal=1)，直接插入 notifications 表
 	if notification.IsGlobal == 1 {
 		return r.db.Create(notification).Error
 	}
 
-	// 如果是私信 (IsGlobal=0)，开启事务
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 插入 notifications 表
+		// 1. 插入主表
 		if err := tx.Create(notification).Error; err != nil {
 			return err
 		}
 
-		// 2. 插入 user_notifications 表 (Inbox模式: 私信同时写入接收者记录，状态为未读)
+		// 2. 插入用户关联表 (初始状态未读)
 		userNotification := models.UserNotification{
 			UserID:         targetUserID,
 			NotificationID: notification.ID,
@@ -49,10 +53,12 @@ func (r *NotificationRepository) Update(notification *models.Notification) error
 	return r.db.Model(notification).Omit("Sender").Save(notification).Error
 }
 
-// FindByID 根据ID查找通知
+// FindByID 根据ID精确查找通知（并包含发送者信息）
 func (r *NotificationRepository) FindByID(id int64) (*models.Notification, error) {
 	var notification models.Notification
-	// 手动关联查询 Sender 信息
+
+	// 使用 Joins 手动关联查询 Sender 信息
+	// 避免默认 Preload 可能带来的 n+1 问题或不需要的关联加载
 	err := r.db.Table("notifications").
 		Select("notifications.*, users.id as sender_id, users.username as sender_username, users.name as sender_name").
 		Joins("LEFT JOIN users ON users.id = notifications.sender_id").
@@ -63,38 +69,38 @@ func (r *NotificationRepository) FindByID(id int64) (*models.Notification, error
 		return nil, err
 	}
 
-	// 简单填充 Sender 指针，保持兼容
-	sender := models.User{
-		ID: notification.SenderID,
-	}
-	// 如果有关联查询出来的字段，可以赋值给 sender (需要 struct scan 支持，这里简单再查一次或优化)
-	// 为保稳妥，使用 First 查询完整 Sender
-	if err := r.db.First(&sender, notification.SenderID).Error; err == nil {
-		notification.Sender = &sender
+	// 填充 Sender 结构体 (因 GORM Scan 到结构体不会自动填充嵌套 struct，需手动处理或使用 Preload)
+	// 这里为了兼容性保持原来的逻辑补充完整
+	if notification.SenderID > 0 {
+		var sender models.User
+		if err := r.db.First(&sender, notification.SenderID).Error; err == nil {
+			notification.Sender = &sender
+		}
 	}
 
 	return &notification, nil
 }
 
-// ListByUser 获取用户通知（包含全员通知和私信）
+// ListByUser 分页获取用户的通知列表
+// 此方法融合了 "全局通知" 和 "私信" 的读取逻辑：
+// 1. 全员通知 (IsGlobal=1): 对所有人都可见。通过 LEFT JOIN user_notifications 判断已读状态。
+// 2. 私信 (IsGlobal=0): 仅当 user_notifications 存在关联记录时才可见。
 func (r *NotificationRepository) ListByUser(userID int64, offset, limit int) ([]models.Notification, int64, error) {
 	var notifications []models.Notification
 	var total int64
 
-	// 查询逻辑：
-	// 1. 全员通知 (IsGlobal=1): 无论 user_notifications 是否有记录都显示。如果 user_notifications 有记录则为已读，否则未读。
-	// 2. 私信 (IsGlobal=0): 必须在 user_notifications 有记录才显示。is_read 状态取自 user_notifications。
-
+	// 构建复合查询
 	db := r.db.Table("notifications").
 		Joins("LEFT JOIN user_notifications un ON notifications.id = un.notification_id AND un.user_id = ?", userID).
 		Where("(notifications.is_global = 1) OR (un.id IS NOT NULL)")
 
-	// 获取总数
+	// 1. 获取符合条件的总数
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 获取分页数据
+	// 2. 获取分页数据并计算是否已读 (is_read)
+	// COALESCE(un.is_read, 0): 如果关联表没有记录(如全员通知未读)，默认为0(未读)
 	err := db.Select("notifications.*, COALESCE(un.is_read, 0) as is_read").
 		Order("notifications.create_time DESC").
 		Offset(offset).
@@ -125,24 +131,26 @@ func (r *NotificationRepository) ListAll(offset, limit int) ([]models.Notificati
 	return notifications, total, nil
 }
 
-// MarkAsRead 标记为已读
+// MarkAsRead 标记通知为已读
+// 该操作会更新或插入 user_notifications 表记录。
 func (r *NotificationRepository) MarkAsRead(id int64, userID int64) error {
-	// 检查 UserNotification 是否已存在
+	// 1. 尝试查找已存在的关联记录 (私信或已读过的全员通知)
 	var un models.UserNotification
 	err := r.db.Where("user_id = ? AND notification_id = ?", userID, id).First(&un).Error
 
 	if err == nil {
-		// 存在记录（私信 OR 已读过的全员通知），更新状态为已读
+		// 2a. 记录存在：若未读则更新为已读
 		if un.IsRead == 0 {
-			now := database.GetDB().NowFunc() // 使用 gorm 获取当前时间，或者 time.Now()
+			now := database.GetDB().NowFunc()
 			un.IsRead = 1
 			un.ReadTime = &now
 			return r.db.Save(&un).Error
 		}
 		return nil
 	} else if err == gorm.ErrRecordNotFound {
-		// 不存在记录（说明是未读的全员通知），插入已读记录
-		// 先确认该通知是否真的存在且是 IsGlobal=1
+		// 2b. 记录不存在 (通常是未读过的全员通知)：需插入一条已读记录
+
+		// 确认通知本身存在且是全员通知
 		var n models.Notification
 		if err := r.db.First(&n, id).Error; err != nil {
 			return err
@@ -158,9 +166,9 @@ func (r *NotificationRepository) MarkAsRead(id int64, userID int64) error {
 			}
 			return r.db.Create(&newUN).Error
 		}
-		return nil // 如果不是全员通知且没记录，理论上用户不应看到，不做操作
+		return nil // 非全员通知且无记录，不做处理
 	} else {
-		return err
+		return err // 其他数据库错误
 	}
 }
 
@@ -178,11 +186,11 @@ func (r *NotificationRepository) Delete(id int64) error {
 	})
 }
 
-// GetUnreadCount 获取未读通知数量
+// GetUnreadCount 获取用户的未读通知总数
 func (r *NotificationRepository) GetUnreadCount(userID int64) (int64, error) {
 	var count int64
 	// 统计逻辑：
-	// 1. 全员通知 (IsGlobal=1) 且 user_notifications 中不存在记录 (un.id IS NULL)
+	// 1. 全员通知 (IsGlobal=1) 且 user_notifications 中不存在记录 (un.id IS NULL 或者 is_read=0)
 	// 2. 私信 (IsGlobal=0) 且 user_notifications 中存在记录但 is_read=0
 
 	err := r.db.Table("notifications").

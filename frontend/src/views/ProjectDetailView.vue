@@ -1,3 +1,13 @@
+<!--
+ * @file ProjectDetailView.vue
+ * @description 项目详情视图
+ * 
+ * 主要功能：
+ * 1. 展示项目概览（进度、金额、日期等）
+ * 2. 展示圆环形进度条和财务统计卡片
+ * 3. 展示收款计划列表，并支持确认收款操作
+ * 4. 提供快速入口：编辑项目、添加收款
+ -->
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -13,6 +23,7 @@ const activeTab = ref(0) // 0: Overview, 1: Payments
 
 // State
 // Partial project for view model or mapped type
+// 视图模型接口
 interface ProjectViewModel {
     id: number
     name: string
@@ -40,7 +51,7 @@ interface PaymentViewModel {
 const payments = ref<PaymentViewModel[]>([])
 const loading = ref(false)
 
-// Dictionaries
+// 字典数据
 const paymentStageDict = ref<DictionaryItem[]>([])
 const paymentMethodDict = ref<DictionaryItem[]>([])
 const projectStatusDict = ref<DictionaryItem[]>([])
@@ -83,13 +94,8 @@ const fetchData = async () => {
         if (data.code === 0 && data.data) {
             const p = data.data
             
-            // Calculate progress if missing
+            // 如果后端未提供进度字段，根据金额计算
             let progress = 0
-            // logic removed: API should provide correct data, but keeping fallback logic safely
-            // p doesn't have progress field in interface yet but might in runtime if extended
-            // Assume strict Project interface
-            
-            // Re-calculate progress based on amounts for consistency
             if (p.total_amount > 0) {
                  progress = Math.min(100, Math.round((p.received_amount / p.total_amount) * 100))
             }
@@ -109,7 +115,7 @@ const fetchData = async () => {
                 contractDate: p.contract_date
             }
 
-            // Handle Payments
+            // 获取款项列表
             let rawPayments: Payment[] = p.payments || []
             if (!rawPayments.length) {
                  const payRes = await projectApi.getPayments(id)
@@ -118,7 +124,7 @@ const fetchData = async () => {
                  }
             }
             
-            // Map payments to View Model
+            // 映射为视图模型
             payments.value = rawPayments.map((rp) => ({
                 id: rp.id,
                 title: getDictionaryLabel(paymentStageDict.value, rp.stage) || rp.remark, 

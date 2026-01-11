@@ -1,26 +1,16 @@
 <script setup lang="ts">
+/**
+ * @file UpcomingPayments.vue
+ * @description 仪表盘即将收款列表组件
+ * 展示即将到期的回款计划，提示金额和剩余天数。
+ */
 import GlassCard from '@/components/common/GlassCard.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const goToDetail = (id: number) => router.push(`/projects/${id}`)
 
-
-
-// Extend Payment type for display if necessary, but for now assuming backend returns needed fields
-// Actually backend Payment struct: ID, ProjectID, Phase, Amount, Status, PaidTime, DueDate
-// The UI needs: id, project (name), client (name), daysLeft (calculated), amount, status
-// We might need to transform data in parent or here. Let's look at api/project.ts Project and Payment definitions.
-// Wait, dashboardApi returns specific structs potentially?
-// dashboardApi.getUpcomingPayments returns Payment[].
-// Let's assume the parent passes the array and we iterate.
-// However, the UI displays "Project Name", "Client Name", "Days Left".
-// The standard Payment struct might not have Project Name or Client Name joined.
-// Let's check api/project.ts first to be sure.
-// But for now, I will define a UI specific interface for the prop or use `any` temporarily if I can't check.
-// Better: Check api/project.ts. I haven't checked it yet.
-// For safety, I'll define an interface locally that matches what we need to display.
-
+// 前端展示用的收款项接口 (聚合了项目/客户信息)
 interface PaymentDisplayItem {
   id: number
   project_id: number
@@ -45,7 +35,7 @@ const statusBgMap: Record<string, string> = {
   danger: 'rgba(255, 69, 58, 0.05)',
   warning: 'rgba(255, 214, 10, 0.05)',
   success: 'rgba(50, 215, 75, 0.05)',
-  pending: 'rgba(255, 255, 255, 0.05)', // Default for others
+  pending: 'rgba(255, 255, 255, 0.05)', // 默认背景
 }
 
 const getStatusColor = (status: string) => statusColorMap[status] || statusColorMap.pending

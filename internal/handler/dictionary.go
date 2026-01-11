@@ -9,20 +9,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DictionaryHandler 字典处理器
+// DictionaryHandler 字典模块接口处理器
+// 负责处理数据字典及其选项的增删改查 HTTP 请求。
 type DictionaryHandler struct {
 	dictService *service.DictionaryService
 }
 
-// NewDictionaryHandler 创建字典处理器
+// NewDictionaryHandler 创建字典处理器实例
 func NewDictionaryHandler() *DictionaryHandler {
 	return &DictionaryHandler{
 		dictService: service.NewDictionaryService(),
 	}
 }
 
-// List 获取字典列表
-// GET /api/v1/dictionaries
+// List 获取所有字典定义
+// @Summary 获取字典列表
+// @Description 获取系统中所有可用的字典类型定义
+// @Tags Dictionary
+// @Security Bearer
+// @Success 200 {array} models.Dictionary
+// @Router /api/v1/dictionaries [get]
 func (h *DictionaryHandler) List(c *gin.Context) {
 	dictionaries, err := h.dictService.List()
 	if err != nil {
@@ -33,8 +39,14 @@ func (h *DictionaryHandler) List(c *gin.Context) {
 	response.Success(c, dictionaries)
 }
 
-// GetItems 获取字典项
-// GET /api/v1/dictionaries/:code/items
+// GetItems 获取指定字典的所有选项
+// @Summary 获取字典选项列表
+// @Description 根据字典编码(Code)获取其下属的所有选项
+// @Tags Dictionary
+// @Security Bearer
+// @Param code path string true "字典编码 (如 project_status)"
+// @Success 200 {array} models.DictionaryItem
+// @Router /api/v1/dictionaries/{code}/items [get]
 func (h *DictionaryHandler) GetItems(c *gin.Context) {
 	code := c.Param("code")
 
@@ -47,21 +59,32 @@ func (h *DictionaryHandler) GetItems(c *gin.Context) {
 	response.Success(c, items)
 }
 
-// CreateItem 创建字典项
-// POST /api/v1/dictionaries/:code/items
+// CreateItem 新增字典选项
+// @Summary 创建字典项
+// @Description 为指定字典添加一个新的选项值(仅限管理员)
+// @Tags Dictionary
+// @Security Bearer
+// @Param code path string true "字典编码"
+// @Param item body dto.CreateDictionaryItemRequest true "字典项参数"
+// @Success 200 {object} models.DictionaryItem
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/dictionaries/{code}/items [post]
 func (h *DictionaryHandler) CreateItem(c *gin.Context) {
+	// 1. 权限校验
 	if c.GetString("role") != "admin" {
 		response.Forbidden(c, "无权操作")
 		return
 	}
 	code := c.Param("code")
 
+	// 2. 参数绑定
 	var req dto.CreateDictionaryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ParamError(c, err.Error())
 		return
 	}
 
+	// 3. 执行创建
 	item, err := h.dictService.CreateItem(code, req.Label, req.Value, req.Sort)
 	if err != nil {
 		response.InternalError(c, "创建字典项失败")
@@ -71,29 +94,39 @@ func (h *DictionaryHandler) CreateItem(c *gin.Context) {
 	response.Success(c, item)
 }
 
-// UpdateItem 更新字典项
-// PUT /api/v1/dictionaries/:code/items/:id
+// UpdateItem 更新字典选项
+// @Summary 更新字典项
+// @Description 更新现有字典选项的名称、值或排序(仅限管理员)
+// @Tags Dictionary
+// @Security Bearer
+// @Param code path string true "字典编码 (仅作路由占位)"
+// @Param id path int true "字典项ID"
+// @Param item body dto.CreateDictionaryItemRequest true "更新参数"
+// @Success 200 {object} models.DictionaryItem
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/dictionaries/{code}/items/{id} [put]
 func (h *DictionaryHandler) UpdateItem(c *gin.Context) {
+	// 1. 权限校验
 	if c.GetString("role") != "admin" {
 		response.Forbidden(c, "无权操作")
 		return
 	}
-	// code := c.Param("code") // Not used in service update, but part of URL
+
+	// 2. ID解析
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.ParamError(c, "无效的字典项ID")
 		return
 	}
 
-	var req dto.CreateDictionaryItemRequest // Reuse create request wrapper or make new one
+	// 3. 参数绑定
+	var req dto.CreateDictionaryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ParamError(c, err.Error())
 		return
 	}
 
-	// Assuming sort is optional in request, handling 0 might be tricky if 0 is valid sort.
-	// But dto probably defines it.
-
+	// 4. 执行更新
 	item, err := h.dictService.UpdateItem(id, req.Label, req.Value, req.Sort)
 	if err != nil {
 		response.InternalError(c, "更新字典项失败")
@@ -103,8 +136,16 @@ func (h *DictionaryHandler) UpdateItem(c *gin.Context) {
 	response.Success(c, item)
 }
 
-// DeleteItem 删除字典项
-// DELETE /api/v1/dictionaries/:code/items/:id
+// DeleteItem 删除字典选项
+// @Summary 删除字典项
+// @Description 物理删除指定的字典选项(仅限管理员)
+// @Tags Dictionary
+// @Security Bearer
+// @Param code path string true "字典编码 (仅作路由占位)"
+// @Param id path int true "字典项ID"
+// @Success 200 {string} string "删除成功"
+// @Failure 403 {string} string "无权操作"
+// @Router /api/v1/dictionaries/{code}/items/{id} [delete]
 func (h *DictionaryHandler) DeleteItem(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		response.Forbidden(c, "无权操作")

@@ -11,13 +11,22 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// PaymentService 收款服务
+// PaymentService 款项(回款)服务
+// 负责处理所有与款项相关的业务逻辑，包括生成收款计划、更新收款状态、
+// 执行回款确认事务以及自动计算回款百分比。
+//
+// 依赖:
+//   - PaymentRepository: 款项数据操作
+//   - ProjectRepository: 项目数据操作 (用于更新项目总已收金额)
 type PaymentService struct {
 	paymentRepo *repository.PaymentRepository
 	projectRepo *repository.ProjectRepository
 }
 
-// NewPaymentService 创建收款服务
+// NewPaymentService 创建并初始化收款服务
+//
+// 返回:
+//   - *PaymentService: 初始化的服务实例
 func NewPaymentService() *PaymentService {
 	return &PaymentService{
 		paymentRepo: repository.NewPaymentRepository(),
@@ -25,22 +34,57 @@ func NewPaymentService() *PaymentService {
 	}
 }
 
-// ListByProject 根据项目获取收款列表
+// ListByProject 根据项目ID获取该项目的所有收款计划
+// 用于在项目详情页展示款项列表。
+//
+// 参数:
+//   - projectID: 项目ID
+//
+// 返回:
+//   - []models.Payment: 款项列表
+//   - error: 数据库查询错误
 func (s *PaymentService) ListByProject(projectID int64) ([]models.Payment, error) {
 	return s.paymentRepo.ListByProject(projectID)
 }
 
-// ListUpcoming 获取即将到期的收款
+// ListUpcoming 获取指定用户近期即将到期的待收款项 (Dashboard用)
+// 通常用于首页"即将收款"卡片，提醒用户关注近期回款。
+//
+// 参数:
+//   - userID: 用户ID
+//   - days: 未来多少天内 (如 7天)
+//   - limit: 最大返回数量 (如 5条)
+//
+// 返回:
+//   - []models.Payment: 即将到期的款项列表
+//   - error: 数据库查询错误
 func (s *PaymentService) ListUpcoming(userID int64, days, limit int) ([]models.Payment, error) {
 	return s.paymentRepo.ListUpcoming(userID, days, limit)
 }
 
-// ListByDateRange 根据日期范围获取收款
+// ListByDateRange 获取指定日期范围内的所有款项记录 (报表/日历用)
+// 包含起始日期和结束日期（闭区间）。
+//
+// 参数:
+//   - userID: 用户ID
+//   - startDate: 开始日期 "YYYY-MM-DD"
+//   - endDate: 结束日期 "YYYY-MM-DD"
+//
+// 返回:
+//   - []models.Payment: 范围内的款项列表
+//   - error: 数据库查询错误
 func (s *PaymentService) ListByDateRange(userID int64, startDate, endDate string) ([]models.Payment, error) {
 	return s.paymentRepo.ListByDateRange(userID, startDate, endDate)
 }
 
-// Create 创建收款
+// Create 创建新的收款/回款计划
+//
+// 参数:
+//   - input: 收款请求DTO
+//
+// 返回:
+//   - *models.Payment: 创建成功的款项实体
+//   - error: 业务规则校验失败或数据库错误
 func (s *PaymentService) Create(input dto.PaymentRequest) (*models.Payment, error) {
 	planDate, err := time.Parse("2006-01-02", input.PlanDate)
 	if err != nil {
@@ -58,11 +102,12 @@ func (s *PaymentService) Create(input dto.PaymentRequest) (*models.Payment, erro
 		UserID:    input.UserID,
 	}
 
+	// 默认状态为"待收款"
 	if payment.Status == "" {
 		payment.Status = "pending"
 	}
 
-	// 处理业务规则（日期、百分比）
+	// 执行核心业务规则校验与处理（如计算百分比、自动填充实际日期逻辑等）
 	if err := s.processPaymentRules(payment); err != nil {
 		return nil, err
 	}
@@ -72,7 +117,7 @@ func (s *PaymentService) Create(input dto.PaymentRequest) (*models.Payment, erro
 		return nil, err
 	}
 
-	// 同步项目总金额
+	// 级联更新: 重新计算并同步该项目对应的"已收款总额"字段
 	if err := s.syncProjectReceivedAmount(payment.ProjectID); err != nil {
 		return nil, err
 	}
@@ -80,7 +125,15 @@ func (s *PaymentService) Create(input dto.PaymentRequest) (*models.Payment, erro
 	return payment, nil
 }
 
-// Update 更新收款
+// Update 更新收款计划详情
+//
+// 参数:
+//   - id: 款项ID
+//   - input: 更新内容
+//
+// 返回:
+//   - *models.Payment: 更新后的实体
+//   - error: 更新失败
 func (s *PaymentService) Update(id int64, input dto.PaymentRequest) (*models.Payment, error) {
 	payment, err := s.paymentRepo.FindByID(id)
 	if err != nil {
@@ -92,6 +145,7 @@ func (s *PaymentService) Update(id int64, input dto.PaymentRequest) (*models.Pay
 		return nil, err
 	}
 
+	// 更新字段
 	payment.Stage = input.Stage
 	payment.Amount = input.Amount
 	payment.PlanDate = planDate
@@ -99,17 +153,17 @@ func (s *PaymentService) Update(id int64, input dto.PaymentRequest) (*models.Pay
 	payment.Method = input.Method
 	payment.Remark = input.Remark
 
-	// 处理业务规则（日期、百分比）
+	// 重新应用业务规则（如重新计算百分比，因为金额可能变了）
 	if err := s.processPaymentRules(payment); err != nil {
 		return nil, err
 	}
 
-	// 更新收款记录
+	// 更新数据库记录
 	if err := s.paymentRepo.Update(payment); err != nil {
 		return nil, err
 	}
 
-	// 同步项目总金额
+	// 级联更新: 数据变更后，必须重新同步项目的总收款状态
 	if err := s.syncProjectReceivedAmount(payment.ProjectID); err != nil {
 		return nil, err
 	}
@@ -117,18 +171,22 @@ func (s *PaymentService) Update(id int64, input dto.PaymentRequest) (*models.Pay
 	return payment, nil
 }
 
-// processPaymentRules 处理通用业务规则
+// processPaymentRules 执行通用款项业务规则处理
+// 包含以下逻辑:
+//  1. 状态与日期的联动: 如果状态改为"paid"(已收款)，自动填充ActualDate(实际收款日)，反之置空。
+//  2. 百分比自动计算: 根据款项金额与项目合同总额，自动计算该笔款项的占比。
 func (s *PaymentService) processPaymentRules(payment *models.Payment) error {
-	// 1. 处理实际收款日期
+	// 1. 处理实际收款日期逻辑
 	if payment.Status == "paid" && payment.ActualDate == nil {
-		// 如果状态为已收款但没有指定实际日期，使用计划日期作为实际日期
+		// 如果标记为已收款但用户未填实际日期，默认等于计划日期
 		payment.ActualDate = &payment.PlanDate
 	}
+	// 如果不是已收款状态，清除实际收款日期
 	if payment.Status != "paid" {
 		payment.ActualDate = nil
 	}
 
-	// 2. 计算百分比
+	// 2. 自动计算百分比
 	project, err := s.projectRepo.FindByID(payment.ProjectID)
 	if err != nil {
 		return err
@@ -143,18 +201,21 @@ func (s *PaymentService) processPaymentRules(payment *models.Payment) error {
 	return nil
 }
 
-// syncProjectReceivedAmount 同步项目已收款总额
+// syncProjectReceivedAmount 重新计算并同步项目的"已收款总额"
+// 此方法应在任何款项金额或状态发生变化后被调用，以确保 Project 表数据的一致性。
 func (s *PaymentService) syncProjectReceivedAmount(projectID int64) error {
 	project, err := s.projectRepo.FindByID(projectID)
 	if err != nil {
 		return err
 	}
 
+	// 聚合计算所有已收款项的总额
 	totalReceived, err := s.paymentRepo.SumPaidByProject(projectID)
 	if err != nil {
 		return err
 	}
 
+	// 仅在金额确实变化时执行更新
 	if project.ReceivedAmount != totalReceived {
 		project.ReceivedAmount = totalReceived
 		if err := s.projectRepo.Update(project); err != nil {
@@ -170,21 +231,37 @@ func (s *PaymentService) Delete(id int64) error {
 	return s.paymentRepo.Delete(id)
 }
 
-// Confirm 确认收款
+// Confirm 确认收款（One-Click 操作）
+// 将款项标记为已收款，并自动更新实际收款日期和方式。通过数据库事务保证原子性。
+//
+// 事务流程:
+//  1. 悲观锁锁定该款项记录 (Avoid Race Conditions)
+//  2. 检查幂等性 (如果已支付直接返回)
+//  3. 更新 Payment 记录状态
+//  4. 重新计算该项目下所有已支付总额 (Sum)
+//  5. 更新 Project 记录的 received_amount
+//
+// 参数:
+//   - id: 款项ID
+//   - actualDate: 实际收款日期字符串
+//   - method: 收款方式 (如 银行转账, 支付宝)
+//
+// 返回:
+//   - error: 事务执行失败
 func (s *PaymentService) Confirm(id int64, actualDate, method string) error {
 	return database.GetDB().Transaction(func(tx *gorm.DB) error {
-		// 1. 锁定并获取当前收款记录
+		// 1. 锁定并获取当前收款记录 (防止并发修改)
 		var payment models.Payment
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&payment, id).Error; err != nil {
 			return err
 		}
 
-		// 2. 幂等性检查
+		// 2. 幂等性检查: 防止重复确认
 		if payment.Status == "paid" {
 			return nil
 		}
 
-		// 3. 更新收款状态
+		// 3. 更新收款状态为"已收款"
 		if err := tx.Model(&payment).Updates(map[string]interface{}{
 			"status":      "paid",
 			"actual_date": actualDate,
@@ -193,7 +270,8 @@ func (s *PaymentService) Confirm(id int64, actualDate, method string) error {
 			return err
 		}
 
-		// 4. 同步项目总额 (使用 current transaction)
+		// 4. 同步计算项目已收款总额
+		// 注意: 必须使用当前事务 tx 进行查询，否则读不到刚才更新的状态
 		var totalReceived float64
 		if err := tx.Model(&models.Payment{}).
 			Where("project_id = ? AND status = ?", payment.ProjectID, "paid").
@@ -202,7 +280,7 @@ func (s *PaymentService) Confirm(id int64, actualDate, method string) error {
 			return err
 		}
 
-		// 5. 更新项目
+		// 5. 更新项目主表 sum 值
 		if err := tx.Model(&models.Project{}).
 			Where("id = ?", payment.ProjectID).
 			Update("received_amount", totalReceived).Error; err != nil {

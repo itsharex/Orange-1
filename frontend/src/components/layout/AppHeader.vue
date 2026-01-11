@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * @file AppHeader.vue
+ * @description 应用顶部导航栏
+ * 包含页面标题、主题切换、通知中心及用户个人菜单。
+ */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
@@ -12,18 +17,23 @@ const router = useRouter()
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 
+// 计算页面标题 (优先读取路由 meta.title, 默认为 '工作台')
 const pageTitle = computed(() => (route.meta.title as string) || '工作台')
+
+// 计算用户首字母头像
 const userInitial = computed(() => {
   const name = authStore.user?.name || authStore.user?.username || 'U'
   return name.charAt(0).toUpperCase()
 })
-const showUserMenu = ref(false)
-const showNotificationDropdown = ref(false)
-const unreadCount = ref(0)
-const recentNotifications = ref<Notification[]>([])
-const showDetailModal = ref(false)
-const selectedNotification = ref<Notification | null>(null)
-let pollInterval: number | null = null
+
+// 状态控制
+const showUserMenu = ref(false)         // 用户菜单显示状态
+const showNotificationDropdown = ref(false) // 通知下拉框显示状态
+const unreadCount = ref(0)              // 未读通知数
+const recentNotifications = ref<Notification[]>([]) // 最近通知列表
+const showDetailModal = ref(false)      // 通知详情模态框
+const selectedNotification = ref<Notification | null>(null) // 选中的通知
+let pollInterval: number | null = null  // 轮询定时器 ID
 
 function toggleUserMenu() {
   showUserMenu.value = !showUserMenu.value
@@ -38,6 +48,7 @@ function closeNotificationDropdown() {
   showNotificationDropdown.value = false
 }
 
+// 切换通知下拉框
 async function toggleNotificationDropdown() {
   showNotificationDropdown.value = !showNotificationDropdown.value
   showUserMenu.value = false
@@ -57,18 +68,20 @@ function goToNotifications() {
   router.push('/settings?tab=notification')
 }
 
+// 处理通知点击事件
 async function handleNotificationClick(item: Notification) {
   closeNotificationDropdown()
   selectedNotification.value = item
   showDetailModal.value = true
   
+  // 如果未读，标记为已读
   if (!item.is_read) {
     try {
       await notificationApi.markAsRead(item.id)
       // 更新本地状态
       item.is_read = true
       unreadCount.value = Math.max(0, unreadCount.value - 1)
-      // 通知其他组件更新
+      // 通知其他组件更新 (如通知页面)
       Events.Emit('notification_updated')
     } catch (error) {
       console.error('Failed to mark as read:', error)

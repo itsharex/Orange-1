@@ -1,24 +1,30 @@
+/**
+ * @file router/index.ts
+ * @description Vue Router 路由配置文件
+ * 定义应用的路由表、路由元信息(Meta)及全局导航守卫。
+ */
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
+  // 使用 Web History 模式 (去掉 URL 中的 #)
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      redirect: '/login', // 根路径默认重定向到登录页
     },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { title: '登录', requiresAuth: false },
+      meta: { title: '登录', requiresAuth: false }, // 无需登录即可访问
     },
     {
       path: '/',
-      component: AppLayout,
-      meta: { requiresAuth: true },
+      component: AppLayout, // 使用通用布局组件
+      meta: { requiresAuth: true }, // 需要登录
       children: [
         {
           path: 'dashboard',
@@ -86,6 +92,8 @@ const router = createRouter({
 })
 
 // Navigation Guard for Auth and Title
+// 全局前置导航守卫
+// 用于处理页面权限验证和动态标题设置
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
@@ -97,14 +105,17 @@ router.beforeEach((to, from, next) => {
     document.title = 'Orange - 项目收款管理系统'
   }
 
-  // 权限检查
+  // 权限检查逻辑
+  // 1. 如果目标路由需要鉴权且用户未登录 -> 重定向到登录页
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-    // 未登录，重定向到登录页
     next({ name: 'login' })
-  } else if (to.name === 'login' && authStore.isLoggedIn) {
-    // 已登录，访问登录页时重定向到工作台
+  } 
+  // 2. 如果已登录状态下访问登录页 -> 重定向到 Dashboard
+  else if (to.name === 'login' && authStore.isLoggedIn) {
     next({ name: 'dashboard' })
-  } else {
+  } 
+  // 3. 其他情况放行
+  else {
     next()
   }
 })

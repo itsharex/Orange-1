@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * @file ProjectList.vue
+ * @description 仪表盘近期项目列表组件
+ * 展示项目概览表格，包括名称、客户、金额、进度和状态。
+ */
 import GlassCard from '@/components/common/GlassCard.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { useRouter } from 'vue-router'
@@ -9,7 +14,7 @@ const goToDetail = (id: number) => router.push(`/projects/${id}`)
 import type { Project } from '@/api/project'
 
 const props = defineProps<{
-  projects: Project[]
+  projects: Project[] // 项目列表数据
 }>()
 
 </script>

@@ -1,10 +1,15 @@
 <script setup lang="ts">
+/**
+ * @file NotificationDetailModal.vue
+ * @description 通知详情模态框组件
+ * 显示单条通知的完整内容，包括标题、正文、时间和发送者。
+ */
 import { computed } from 'vue'
 import type { Notification } from '@/api/notification'
 
 const props = defineProps<{
-  modelValue: boolean
-  notification: Notification | null
+  modelValue: boolean          // 控制模态框显示 (v-model)
+  notification: Notification | null // 当前选中的通知对象
 }>()
 
 const emit = defineEmits<{

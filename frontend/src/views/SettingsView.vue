@@ -1,3 +1,14 @@
+<!--
+ * @file SettingsView.vue
+ * @description 系统设置视图
+ * 
+ * 主要功能：
+ * 1. 个人信息管理 (Profile)：修改昵称、职位、联系方式
+ * 2. 字典管理 (Dictionary)：管理员维护各类业务字典
+ * 3. 安全设置 (Security)：修改密码
+ * 4. 通知管理 (Notification)：查看系统消息，管理员可发送通知
+ * 5. 关于 (About)：检查版本更新
+ -->
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -61,6 +72,7 @@ watch(() => route.query.id, async (newId) => {
 
 const authStore = useAuthStore()
 
+// 计算设置导航菜单 (根据权限动态显示)
 const settingsNav = computed(() => {
   const items = [
     { key: 'profile', icon: 'ri-user-line', label: '个人信息' },
@@ -111,9 +123,9 @@ const fetchProfile = async () => {
   }
 }
 
-// Update profile
+// 保存个人信息
 const saveProfile = async () => {
-  // Check if modified
+  // 检查是否有变更
   const isModified =
     profile.value.name !== originalProfile.value.name ||
     profile.value.position !== originalProfile.value.position ||
@@ -130,13 +142,13 @@ const saveProfile = async () => {
     const res = await authApi.updateProfile({
       name: profile.value.name,
       position: profile.value.position,
-      email: profile.value.email, // Add email
+      email: profile.value.email, 
       phone: profile.value.phone,
       department: profile.value.department,
     })
     if (res.data.code === 0) {
       toast.success('保存成功')
-      // Update original profile after success
+      // 更新原始快照
       originalProfile.value = { ...profile.value }
     } else {
       toast.error(`保存失败: ${res.data.message}`)
@@ -147,9 +159,8 @@ const saveProfile = async () => {
   }
 }
 
-// ============ Dictionary Logic ============
-const activeDictId = ref<string>('') // Holds Dictionary Code
-
+// ============ 字典管理逻辑 ============
+const activeDictId = ref<string>('') // 选中的字典 Code
 const dictionaries = ref<Dictionary[]>([])
 const activeDictItems = ref<DictionaryItem[]>([])
 
@@ -277,10 +288,10 @@ const deleteDictItem = async (id: number) => {
 
 
 
-// ============ Notification Logic (Everyone) ============
+// ============ 通知管理逻辑 (通用 + 管理员) ============
 const notifications = ref<Notification[]>([])
 const notificationTotal = ref(0)
-const targetUsers = ref<UserBrief[]>([])
+const targetUsers = ref<UserBrief[]>([]) // 发送通知时的目标用户列表
 const notificationLoading = ref(false)
 const showCreateNotificationModal = ref(false)
 const creatingNotification = ref(false)
@@ -555,22 +566,18 @@ const handlePasswordChange = async () => {
 // ============ About Logic ============
 const checkingUpdate = ref(false)
 
+// 检查软件更新
 const checkUpdate = async () => {
   checkingUpdate.value = true
   try {
-    // 调用后端代理接口，避免 CORS 问题
+    // 调用后端代理接口，避免跨域 (CORS) 问题
     const { data } = await api.get('/system/updates/check')
-    
-    // 兼容后端返回结构: { code: 0, data: { tag_name: "v0.1.2", ... } }
-    // api 拦截器会自动解包并返回 AxiosResponse，其中 data 是 ApiResponse
-    // 但我们的拦截器 return response，所以这里 data 是 { code: 0, message: "success", data: { tag_name: ... } }
-    // 还是说拦截器直接返回了 response.data? Note: api.interceptors.response.use returns response (line 55 of api/index.ts)
-    // So 'data' here is the AxiosResponse.data, which is { code: 0, message: "...", data: { ... } }
     
     const releaseInfo = data.data
     const latestVersionTag = releaseInfo.tag_name 
     const htmlUrl = releaseInfo.html_url
     
+    // 简单的版本号比较逻辑 (去掉 'v' 前缀)
     const cleanLatest = latestVersionTag.replace(/^v/, '')
     const cleanCurrent = pkg.version.replace(/^v/, '')
     

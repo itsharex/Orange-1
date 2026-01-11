@@ -9,12 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ProjectHandler 项目处理器
+// ProjectHandler 项目管理模块接口处理器
+// 负责处理项目的增删改查、归档及相关辅助功能(如合同编号生成)的请求。
 type ProjectHandler struct {
 	projectService *service.ProjectService
 }
 
-// NewProjectHandler 创建项目处理器
+// NewProjectHandler 创建项目处理器实例
 func NewProjectHandler() *ProjectHandler {
 	return &ProjectHandler{
 		projectService: service.NewProjectService(),
@@ -22,7 +23,16 @@ func NewProjectHandler() *ProjectHandler {
 }
 
 // List 获取项目列表
-// GET /api/v1/projects
+// @Summary 获取项目列表
+// @Description 分页查询项目，支持按状态(status)和关键词(keyword)搜索
+// @Tags Project
+// @Security Bearer
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Param status query string false "项目状态: pending, processing, completed, archived"
+// @Param keyword query string false "搜索关键词: 项目名称或合同编号"
+// @Success 200 {object} response.PageResult
+// @Router /api/v1/projects [get]
 func (h *ProjectHandler) List(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	status := c.Query("status")
@@ -40,7 +50,13 @@ func (h *ProjectHandler) List(c *gin.Context) {
 }
 
 // Get 获取项目详情
-// GET /api/v1/projects/:id
+// @Summary 项目详情
+// @Description 根据项目ID获取详细信息
+// @Tags Project
+// @Security Bearer
+// @Param id path int true "项目ID"
+// @Success 200 {object} models.Project
+// @Router /api/v1/projects/{id} [get]
 func (h *ProjectHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -57,8 +73,14 @@ func (h *ProjectHandler) Get(c *gin.Context) {
 	response.Success(c, project)
 }
 
-// Create 创建项目
-// POST /api/v1/projects
+// Create 创建新项目
+// @Summary 创建项目
+// @Description 创建一个新的项目记录
+// @Tags Project
+// @Security Bearer
+// @Param project body dto.CreateProjectRequest true "项目信息"
+// @Success 200 {object} models.Project
+// @Router /api/v1/projects [post]
 func (h *ProjectHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
@@ -80,7 +102,14 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 }
 
 // Update 更新项目
-// PUT /api/v1/projects/:id
+// @Summary 更新项目
+// @Description 更新项目的基础信息、状态或合同金额
+// @Tags Project
+// @Security Bearer
+// @Param id path int true "项目ID"
+// @Param project body dto.CreateProjectRequest true "更新信息"
+// @Success 200 {object} models.Project
+// @Router /api/v1/projects/{id} [put]
 func (h *ProjectHandler) Update(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -104,7 +133,13 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 }
 
 // Delete 删除项目
-// DELETE /api/v1/projects/:id
+// @Summary 删除项目
+// @Description 软删除或硬删除项目记录(视Repo实现而定)，通常会级联删除关联款项
+// @Tags Project
+// @Security Bearer
+// @Param id path int true "项目ID"
+// @Success 200 {string} string "删除成功"
+// @Router /api/v1/projects/{id} [delete]
 func (h *ProjectHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -121,7 +156,13 @@ func (h *ProjectHandler) Delete(c *gin.Context) {
 }
 
 // Archive 归档项目
-// POST /api/v1/projects/:id/archive
+// @Summary 归档项目
+// @Description 将项目标记为已归档，不再在常规列表中显示
+// @Tags Project
+// @Security Bearer
+// @Param id path int true "项目ID"
+// @Success 200 {string} string "归档成功"
+// @Router /api/v1/projects/{id}/archive [post]
 func (h *ProjectHandler) Archive(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -137,8 +178,15 @@ func (h *ProjectHandler) Archive(c *gin.Context) {
 	response.SuccessWithMessage(c, "归档成功", nil)
 }
 
-// CheckContractNumber 检查合同编号是否已存在
-// GET /api/v1/projects/check-contract-number?contract_number=xxx&exclude_id=xxx
+// CheckContractNumber 检查合同编号是否可用
+// @Summary 检查合同号唯一性
+// @Description 检查输入的合同编号是否已被其他项目使用
+// @Tags Project
+// @Security Bearer
+// @Param contract_number query string true "待检查的合同编号"
+// @Param exclude_id query int false "排除的项目ID(编辑时使用)"
+// @Success 200 {object} map[string]bool
+// @Router /api/v1/projects/check-contract-number [get]
 func (h *ProjectHandler) CheckContractNumber(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	contractNumber := c.Query("contract_number")
@@ -158,8 +206,14 @@ func (h *ProjectHandler) CheckContractNumber(c *gin.Context) {
 	response.Success(c, gin.H{"exists": exists})
 }
 
-// GenerateContractNumber 生成下一个合同编号
-// GET /api/v1/projects/generate-contract-number?date=2026-01-10
+// GenerateContractNumber 生成建议合同编号
+// @Summary 生成合同编号
+// @Description 根据日期生成格式为 HTYYYYMMDDXXXX 的智能建议编号
+// @Tags Project
+// @Security Bearer
+// @Param date query string true "项目日期 (YYYY-MM-DD)"
+// @Success 200 {object} map[string]string
+// @Router /api/v1/projects/generate-contract-number [get]
 func (h *ProjectHandler) GenerateContractNumber(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	date := c.Query("date")

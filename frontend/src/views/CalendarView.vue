@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * @file CalendarView.vue
+ * @description 收款日历页面
+ * 这是一个复杂的自定义日历组件，用于展示每月的收款计划。
+ * 包含日历网格视图和侧边栏详情视图，支持月度切换和按天查看。
+ */
 import { ref, computed, onMounted, watch } from 'vue'
 import GlassCard from '@/components/common/GlassCard.vue'
 import { paymentApi, type Payment } from '@/api/project'
@@ -28,7 +34,10 @@ const fetchDictionaries = async () => {
   }
 }
 
-// 获取当月数据
+/**
+ * 获取当月数据
+ * 自动计算当前视图年月的起始和结束日期，查询该范围内的所有收款。
+ */
 const fetchPayments = async () => {
   const start = dayjs(new Date(year.value, month.value, 1)).format('YYYY-MM-01')
   const end = dayjs(new Date(year.value, month.value + 1, 0)).format('YYYY-MM-DD')
@@ -65,6 +74,10 @@ interface DisplayDay {
   dateStr?: string
 }
 
+/**
+ * 日历核心逻辑：生成 6x7 网格所需要的所有日期对象
+ * 包括上月剩余天数、当月天数、下月补充天数。
+ */
 const calendarDays = computed<DisplayDay[]>(() => {
   const y = year.value
   const m = month.value
@@ -74,12 +87,12 @@ const calendarDays = computed<DisplayDay[]>(() => {
 
   const days: DisplayDay[] = []
 
-  // 上月
+  // 1. 上月余数
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
     days.push({ day: lastMonthDays - i, type: 'prev' })
   }
 
-  // 当月
+  // 2. 当月日期
   const today = new Date()
   const isCurrentMonth = today.getFullYear() === y && today.getMonth() === m
   const paymentDates = payments.value.map(p => p.plan_date.split('T')[0])
@@ -95,7 +108,7 @@ const calendarDays = computed<DisplayDay[]>(() => {
     })
   }
 
-  // 下月填充至 42 格
+  // 3. 下月填充至 42 格 (6行)
   const remaining = 42 - days.length
   for (let i = 1; i <= remaining; i++) {
     days.push({ day: i, type: 'next' })
@@ -135,7 +148,13 @@ const monthlyPayments = computed(() => {
 const formatStage = (p: Payment) => {
   const stageItem = paymentStageOptions.value.find(s => s.value === p.stage)
   const stageName = stageItem ? stageItem.label : p.stage
-  return p.percentage ? `${stageName} (${p.percentage}%)` : stageName
+  
+  if (p.percentage) {
+    // 保留两位小数，如果是整数去掉小数部分 (例如 30.00 -> 30, 33.3333 -> 33.33)
+    const percentage = Number(p.percentage).toFixed(2).replace(/\.0+$/, '').replace(/(\.[0-9]*[1-9])0+$/, '$1')
+    return `${stageName} (${percentage}%)`
+  }
+  return stageName
 }
 
 const formatAmount = (amount: number) => {

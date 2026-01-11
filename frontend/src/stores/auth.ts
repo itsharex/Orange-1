@@ -1,21 +1,32 @@
+/**
+ * @file stores/auth.ts
+ * @description 用户认证状态管理
+ * 管理用户登录状态、Token、用户信息及相关操作（登录、注册、注销、更新信息）。
+ */
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { authApi, type User, type LoginRequest } from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
-  // 从 localStorage 读取登录状态
+  // State: 从 localStorage 初始化状态，实现持久化
   const token = ref<string | null>(localStorage.getItem('token'))
   const user = ref<User | null>(
     JSON.parse(localStorage.getItem('user') || 'null')
   )
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  const loading = ref(false) // 异步操作加载状态
+  const error = ref<string | null>(null) // 错误信息
 
-  // 计算属性
+  // Getters (Computed)
+  // 判断是否有 Token
   const isLoggedIn = computed(() => !!token.value)
+  // 与 isLoggedIn 相同，可根据业务扩展
   const isAuthenticated = computed(() => !!token.value)
 
-  // 登录
+  /**
+   * 用户登录
+   * @param credentials 登录凭证 (username, password)
+   * @returns 登录成功返回 true, 失败返回 false
+   */
   async function login(credentials: LoginRequest) {
     loading.value = true
     error.value = null
@@ -42,7 +53,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 注册
+  /**
+   * 用户注册
+   * @param data 注册信息
+   */
   async function register(data: { username: string; name: string; email?: string; phone?: string; password: string }) {
     loading.value = true
     error.value = null
@@ -58,7 +72,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 退出登录
+  /**
+   * 退出登录
+   * 清除服务端 Session 及本地 Token 和用户信息
+   */
   async function logout() {
     try {
       await authApi.logout()
@@ -76,7 +93,10 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('isAuthenticated')
   }
 
-  // 刷新用户信息
+  /**
+   * 刷新当前用户信息
+   * 从后端获取最新的用户信息并更新本地存储
+   */
   async function refreshUser() {
     if (!token.value) return
 
@@ -90,7 +110,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 更新个人信息
+  /**
+   * 更新个人资料
+   * @param data 需要更新的字段
+   */
   async function updateProfile(data: { name?: string; phone?: string; department?: string; position?: string }) {
     loading.value = true
     error.value = null
@@ -108,7 +131,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 修改密码
+  /**
+   * 修改密码
+   * @param oldPassword 旧密码
+   * @param newPassword 新密码
+   */
   async function changePassword(oldPassword: string, newPassword: string) {
     loading.value = true
     error.value = null
