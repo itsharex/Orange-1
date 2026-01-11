@@ -1,18 +1,24 @@
 name: Release
+# 触发条件配置
 on:
   push:
+    # 仅当推送以 'v' 开头的标签时触发 (例如 v0.1.0)
     tags:
       - 'v*'
+  # 允许手动触发工作流
   workflow_dispatch:
 
 permissions:
+  # 授予 GITHUB_TOKEN 写权限，以便创建 Release 和上传 Assets
   contents: write
 
 jobs:
   release:
     strategy:
+      # 当某个矩阵任务失败时，不要取消其他正在运行的任务
       fail-fast: false
       matrix:
+        # 定义构建矩阵，分别为 macOS, Ubuntu (Linux), Windows
         platform: [macos-latest, ubuntu-latest, windows-latest]
         include:
           - platform: macos-latest
@@ -27,47 +33,58 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
+      # 1. 检出代码库
       - uses: actions/checkout@v4
 
+      # 2. 设置 Node.js 环境 (用于构建前端)
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      # 3. 设置 Go 环境 (用于构建后端)
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.5'
           check-latest: true
 
+      # 4. (Linux) 安装系统依赖库
+      # 包括 GTK3, WebKit2GTK (Wails 运行时依赖) 以及 rpm/nsis 打包工具
       - name: Install Linux Dependencies
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential nsis rpm
 
+      # 5. 安装 Wails CLI 工具
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.55
 
+      # 6. 安装 Task 构建工具
       - name: Install Task
         run: go install github.com/go-task/task/v3/cmd/task@latest
 
+      # 7. (Windows) 安装打包依赖 NSIS
       - name: Install Windows Dependencies
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           choco install nsis
+          # 将 NSIS 添加到系统路径
           echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "C:\Program Files (x86)\NSIS\Bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      # 8. 执行构建与打包
+      # 调用 Taskfile.yml 中定义的 package 任务
+      # - Windows: 调用 makensis 生成安装程序
+      # - Linux: 生成 .deb, .rpm, .AppImage 
+      # - macOS: 生成 .app 包
       - name: Build and Package
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # We assume 'task package' is sufficient for all platforms as defined in Taskfile.yml
-        # Windows: needs NSIS (installed above)
-        # Linux: creates bin/Orange (binary), bin/*.deb, bin/*.rpm, bin/*.AppImage
-        # macOS: creates bin/Orange.app
         run: task package
 
-      # macOS: Zip the .app bundle with version
+      # 9. (macOS) 压缩 App Bundle
+      # 将 .app 文件夹压缩为 .zip 以便于分发
       - name: Zip macOS App
         if: matrix.platform == 'macos-latest'
         run: |
@@ -75,32 +92,43 @@ jobs:
           zip -r Orange-${{ github.ref_name }}-macOS-universal.zip Orange.app
           cd ..
 
-      # Windows: Check for installer and rename with version
+      # 10. (Windows) 查找并重命名安装包
+      # project.nsi 将安装包直接输出到了 bin/ 目录
       - name: Prepare Windows Artifacts
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME
-          # Move installer to bin if it exists in nsis folder, and rename it
-          if (Test-Path "build/windows/nsis/*-installer.exe") {
-            Move-Item "build/windows/nsis/*-installer.exe" "bin/Orange-${version}-windows-amd64-installer.exe"
+          # 查找 bin 目录下生成的 installer exe 文件
+          $installer = Get-ChildItem -Path "bin" -Filter "*-installer.exe" | Select-Object -First 1
+          
+          if ($installer) {
+            # 重命名为标准格式: Orange-vX.Y.Z-windows-amd64-installer.exe
+            $newName = "bin/Orange-${version}-windows-amd64-installer.exe"
+            Move-Item $installer.FullName $newName
+            Write-Host "Renamed $($installer.Name) to $newName"
+          } else {
+            Write-Warning "No installer found in bin/ matching *-installer.exe"
+            # 调试用：列出 bin 目录内容
+            Get-ChildItem -Path "bin" | ForEach-Object { Write-Host $_.Name }
           }
 
-      # Linux: Rename artifacts to include version
+      # 11. (Linux) 重命名构建产物
+      # 为生成的 .deb, .rpm, .AppImage 添加版本号后缀
       - name: Prepare Linux Artifacts
         if: matrix.platform == 'ubuntu-latest'
         run: |
           VERSION=${GITHUB_REF_NAME}
           cd bin
-          # Rename .deb if exists (assuming it's named Orange.deb or similar generic name)
+          # 重命名 .deb 包
           if [ -f "Orange.deb" ]; then
             mv Orange.deb Orange-${VERSION}-linux-amd64.deb
           fi
-          # Rename .rpm if exists
+          # 重命名 .rpm 包
           if [ -f "Orange.rpm" ]; then
             mv Orange.rpm Orange-${VERSION}-linux-amd64.rpm
           fi
-          # Rename .AppImage if exists (it usually has a dynamic name, catch wildcard)
+          # 重命名 .AppImage
           for file in *.AppImage; do
              if [ -f "$file" ]; then
                mv "$file" "Orange-${VERSION}-linux-x86_64.AppImage"
@@ -108,19 +136,21 @@ jobs:
           done
           cd ..
 
+      # 12. 提取发布日志 (Release Notes)
+      # 从 CHANGELOG.md 中提取当前版本的变更日志
       - name: Generate Release Notes
         shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           echo "Extracting release notes for version $VERSION"
-          # Extract content between the version header and the next header
+          # 使用 awk 提取对应版本的段落
           if [ -f CHANGELOG.md ]; then
              awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > RELEASE_NOTES.md
           else
              echo "CHANGELOG.md not found" > RELEASE_NOTES.md
           fi
           
-          # If empty (no match), perform a fallback or just leave empty
+          # 如果提取为空，使用默认提示
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "No specific release notes found for $VERSION in CHANGELOG.md"
             echo "See CHANGELOG.md for details." > RELEASE_NOTES.md
@@ -128,6 +158,8 @@ jobs:
             cat RELEASE_NOTES.md
           fi
 
+      # 13. 创建 GitHub Release 并上传产物
+      # 将处理好的所有构建产出上传到 Release 页面
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:

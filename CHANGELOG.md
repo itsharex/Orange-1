@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10] - 2026-01-11
+
+### Fixed
+
+- **CI**: Fixed Windows installer path in GitHub Actions workflow to ensure artifacts are correctly uploaded to Releases.
+- **Documentation**: Added detailed Chinese comments to `.github/workflows/release.yml` for better CI/CD process understanding.
+
 ## [0.1.9] - 2026-01-11
 
 ### Changed
