@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.1] - 2026-01-25
+
+### Fixed
+
+- **Dashboard**: Fixed percentage precision issue - trend percentages now display with 2 decimal places instead of excessive precision (e.g., `328.57%` instead of `328.57142857142856%`).
+- **Analytics**: Unified percentage precision to 2 decimal places for all trend indicators in the Analytics view.
+
+### Changed
+
+- **Projects**: Payment records in project detail view are now sorted by plan date in descending order (newest first).
+
+---
+
 ## [0.4.0] - 2026-01-13
 
 ### Added

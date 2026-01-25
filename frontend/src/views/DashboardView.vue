@@ -31,41 +31,41 @@ const statsData = ref<DashboardStats>({
 })
 
 const statsDisplay = computed(() => [
-  { 
-    label: '总收款金额', 
-    value: `¥${statsData.value.total_amount.toLocaleString()}`, 
-    icon: 'ri-money-dollar-circle-line', 
+  {
+    label: '总收款金额',
+    value: `¥${statsData.value.total_amount.toLocaleString()}`,
+    icon: 'ri-money-dollar-circle-line',
     trendPrefix: '较上月',
-    trend: `${Math.abs(statsData.value.total_trend)}%`, 
-    trendUp: statsData.value.total_trend >= 0, 
-    iconColorClass: 'stat-card-icon--primary' 
+    trend: `${Math.abs(statsData.value.total_trend).toFixed(2)}%`,
+    trendUp: statsData.value.total_trend >= 0,
+    iconColorClass: 'stat-card-icon--primary',
   },
-  { 
-    label: '已结算金额', 
-    value: `¥${statsData.value.paid_amount.toLocaleString()}`, 
-    icon: 'ri-checkbox-circle-line', 
+  {
+    label: '已结算金额',
+    value: `¥${statsData.value.paid_amount.toLocaleString()}`,
+    icon: 'ri-checkbox-circle-line',
     trendPrefix: '较上月',
-    trend: `${Math.abs(statsData.value.paid_trend)}%`, 
-    trendUp: statsData.value.paid_trend >= 0, 
-    iconColorClass: 'stat-card-icon--success' 
+    trend: `${Math.abs(statsData.value.paid_trend).toFixed(2)}%`,
+    trendUp: statsData.value.paid_trend >= 0,
+    iconColorClass: 'stat-card-icon--success',
   },
-  { 
-    label: '待结算金额', 
-    value: `¥${statsData.value.pending_amount.toLocaleString()}`, 
-    icon: 'ri-time-line', 
+  {
+    label: '待结算金额',
+    value: `¥${statsData.value.pending_amount.toLocaleString()}`,
+    icon: 'ri-time-line',
     trendPrefix: '较上月',
-    trend: `${Math.abs(statsData.value.pending_trend)}%`, 
+    trend: `${Math.abs(statsData.value.pending_trend).toFixed(2)}%`,
     trendUp: statsData.value.pending_trend >= 0, // Pending trend up might be bad? Usually context dependent. optimized: false? Keeping simple.
-    iconColorClass: 'stat-card-icon--warning' 
+    iconColorClass: 'stat-card-icon--warning',
   },
-  { 
-    label: '逾期金额', 
-    value: `¥${statsData.value.overdue_amount.toLocaleString()}`, 
-    icon: 'ri-error-warning-line', 
+  {
+    label: '逾期金额',
+    value: `¥${statsData.value.overdue_amount.toLocaleString()}`,
+    icon: 'ri-error-warning-line',
     trendPrefix: '较上月',
-    trend: `${Math.abs(statsData.value.overdue_trend)}%`, 
+    trend: `${Math.abs(statsData.value.overdue_trend).toFixed(2)}%`,
     trendUp: statsData.value.overdue_trend >= 0, // Overdue up is definitely bad. But trendUp usually just controls arrow direction.
-    iconColorClass: 'stat-card-icon--danger' 
+    iconColorClass: 'stat-card-icon--danger',
   },
 ])
 
@@ -114,25 +114,26 @@ const fetchDashboardData = async () => {
     }
 
     if (paymentRes.data.code === 0) {
-      upcomingPayments.value = paymentRes.data.data.map((p: Payment) => {
-        // 使用标准日期计算剩余天数
-        const due = new Date(p.plan_date)
-        const today = new Date()
-        const diffTime = due.getTime() - today.getTime()
-        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-        
-        return {
-          id: p.id,
-          project_id: p.project_id,
-          project_name: p.project ? p.project.name : '未知项目',
-          client_name: p.project ? p.project.company : '未知客户',
-          days_left: days >= 0 ? days : 0, 
-          amount: p.amount,
-          status: days < 0 ? 'danger' : days < 3 ? 'danger' : days < 7 ? 'warning' : 'success'
-        }
-      }).slice(0, 3) // Only show top 3 upcoming payments
-    }
+      upcomingPayments.value = paymentRes.data.data
+        .map((p: Payment) => {
+          // 使用标准日期计算剩余天数
+          const due = new Date(p.plan_date)
+          const today = new Date()
+          const diffTime = due.getTime() - today.getTime()
+          const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
+          return {
+            id: p.id,
+            project_id: p.project_id,
+            project_name: p.project ? p.project.name : '未知项目',
+            client_name: p.project ? p.project.company : '未知客户',
+            days_left: days >= 0 ? days : 0,
+            amount: p.amount,
+            status: days < 0 ? 'danger' : days < 3 ? 'danger' : days < 7 ? 'warning' : 'success',
+          }
+        })
+        .slice(0, 3) // Only show top 3 upcoming payments
+    }
   } catch (error) {
     console.error('Failed to fetch dashboard data', error)
     toast.error('获取仪表盘数据失败')
@@ -166,19 +167,15 @@ onActivated(() => {
 <template>
   <div class="dashboard-view">
     <!-- Stats Grid -->
-    <div class="grid grid-cols-4" style="margin-bottom: var(--spacing-lg);">
-      <StatCard
-        v-for="stat in statsDisplay"
-        :key="stat.label"
-        v-bind="stat"
-      />
+    <div class="grid grid-cols-4" style="margin-bottom: var(--spacing-lg)">
+      <StatCard v-for="stat in statsDisplay" :key="stat.label" v-bind="stat" />
     </div>
 
     <!-- Charts & Actions -->
     <div class="grid dashboard-charts-row">
-      <IncomeChart 
-        :labels="incomeLabels" 
-        :values="incomeValues" 
+      <IncomeChart
+        :labels="incomeLabels"
+        :values="incomeValues"
         v-model="activePeriod"
         @change="handlePeriodChange"
       />

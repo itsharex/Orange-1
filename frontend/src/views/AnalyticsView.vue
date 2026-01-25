@@ -39,13 +39,13 @@ const stats = ref<DashboardStats>({
 // 计算收款率 (已收 / 总额)
 const collectionRate = computed(() => {
   if (stats.value.total_amount === 0) return 0
-  return ((stats.value.paid_amount / stats.value.total_amount) * 100).toFixed(1)
+  return ((stats.value.paid_amount / stats.value.total_amount) * 100).toFixed(2)
 })
 
 // 计算逾期率 (逾期 / 总额)
 const overdueRate = computed(() => {
   if (stats.value.total_amount === 0) return 0
-  return ((stats.value.overdue_amount / stats.value.total_amount) * 100).toFixed(1)
+  return ((stats.value.overdue_amount / stats.value.total_amount) * 100).toFixed(2)
 })
 
 const fetchStats = async () => {
@@ -279,7 +279,7 @@ const chartTitle = computed(() => {
         :trendPrefix="trendPrefix"
         trend-direction="up"
         :trend-up="stats.avg_collection_days_trend >= 0"
-        :trendValue="Math.abs(stats.avg_collection_days_trend).toFixed(1) + '%'"
+        :trendValue="Math.abs(stats.avg_collection_days_trend).toFixed(2) + '%'"
         variant="primary"
       />
       <StatCard
@@ -289,7 +289,7 @@ const chartTitle = computed(() => {
         :trendPrefix="trendPrefix"
         trend-direction="up"
         :trend-up="stats.total_trend >= 0"
-        :trendValue="Math.abs(stats.total_trend).toFixed(1) + '%'"
+        :trendValue="Math.abs(stats.total_trend).toFixed(2) + '%'"
         variant="success"
       />
       <StatCard
@@ -300,7 +300,7 @@ const chartTitle = computed(() => {
         :trendPrefix="trendPrefix"
         trend-direction="up"
         :trend-up="stats.paid_trend >= 0"
-        :trendValue="Math.abs(stats.paid_trend).toFixed(1) + '%'"
+        :trendValue="Math.abs(stats.paid_trend).toFixed(2) + '%'"
         variant="warning"
       />
       <StatCard
@@ -311,7 +311,7 @@ const chartTitle = computed(() => {
         :trendPrefix="trendPrefix"
         trend-direction="down"
         :trend-up="stats.overdue_trend >= 0"
-        :trendValue="Math.abs(stats.overdue_trend).toFixed(1) + '%'"
+        :trendValue="Math.abs(stats.overdue_trend).toFixed(2) + '%'"
         variant="danger"
       />
     </div>

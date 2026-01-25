@@ -79,7 +79,7 @@ func (r *PaymentRepository) FindByIDWithProject(id int64) (*models.Payment, erro
 func (r *PaymentRepository) ListByProject(projectID int64) ([]models.Payment, error) {
 	var payments []models.Payment
 	if err := r.db.Where("project_id = ?", projectID).
-		Order("plan_date ASC").
+		Order("plan_date DESC").
 		Find(&payments).Error; err != nil {
 		return nil, err
 	}

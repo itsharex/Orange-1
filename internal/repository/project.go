@@ -28,7 +28,9 @@ func (r *ProjectRepository) FindByID(id int64) (*models.Project, error) {
 // FindByIDWithPayments 根据ID查找项目（包含收款列表）
 func (r *ProjectRepository) FindByIDWithPayments(id int64) (*models.Project, error) {
 	var project models.Project
-	if err := r.db.Preload("Payments").First(&project, id).Error; err != nil {
+	if err := r.db.Preload("Payments", func(db *gorm.DB) *gorm.DB {
+		return db.Order("plan_date DESC")
+	}).First(&project, id).Error; err != nil {
 		return nil, err
 	}
 	return &project, nil
