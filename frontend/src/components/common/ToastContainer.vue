@@ -33,6 +33,9 @@ const { toasts, remove } = useToast()
 </template>
 
 <style scoped>
+/* ============================================
+   Toast - Liquid Glass Capsule
+   ============================================ */
 .toast-container {
   position: fixed;
   top: 32px;
@@ -43,33 +46,33 @@ const { toasts, remove } = useToast()
   flex-direction: column;
   gap: 16px;
   pointer-events: none;
+  /* Fix animation jump: maintain width when items become absolute */
+  min-width: 340px;
+  max-width: 90vw;
 }
 
 .toast-item {
   pointer-events: auto;
-  min-width: 320px;
-  max-width: 90vw;
-  padding: 14px 20px;
-  border-radius: var(--radius-xl); /* Capsule shape */
+  width: 100%; /* Fill container */
+  /* min-width moved to container to prevent collapse */
+  padding: 14px 24px;
+  border-radius: 50px; /* Full Capsule */
   
-  /* Liquid Glass Base */
+  /* Deep Liquid Glass */
   background: var(--bg-elevated);
-  backdrop-filter: 
-    blur(var(--glass-blur)) 
-    saturate(var(--glass-saturation))
-    brightness(var(--glass-brightness));
-  -webkit-backdrop-filter: 
-    blur(var(--glass-blur)) 
-    saturate(var(--glass-saturation))
-    brightness(var(--glass-brightness));
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
     
-  border: var(--glass-border);
-  box-shadow: var(--glass-shadow-outer), var(--glass-shadow-inner);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 10px 30px -5px rgba(0, 0, 0, 0.1),
+    0 4px 10px -2px rgba(0, 0, 0, 0.05),
+    var(--glass-shadow-inner);
   
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   cursor: pointer;
   font-family: var(--font-text);
   font-size: 14px;
@@ -78,79 +81,65 @@ const { toasts, remove } = useToast()
   
   position: relative;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  will-change: transform, box-shadow;
 }
 
-/* Specular Highlight (High Gloss) */
-.toast-item::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--glass-specular);
-  pointer-events: none;
-  z-index: 0;
-  border-radius: inherit;
-  opacity: 0.8;
-  mix-blend-mode: overlay;
+/* Hover Levitation */
+.toast-item:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    0 20px 40px -5px rgba(0, 0, 0, 0.15),
+    0 8px 16px -4px rgba(0, 0, 0, 0.1),
+    var(--glass-shadow-inner);
 }
 
-/* Inner Glow / Edge Light */
+/* Inner Glow */
 .toast-item::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.15),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   pointer-events: none;
   z-index: 1;
 }
 
-[data-theme="dark"] .toast-item::after {
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    inset 0 1px 2px rgba(255, 255, 255, 0.05);
+[data-theme="dark"] .toast-item {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 10px 40px -10px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* Icon & Content styling ensure they are above effects */
-.icon, .message {
-  position: relative;
-  z-index: 2;
-}
-
-/* Type-specific styling - using subtle tints instead of heavy borders */
+/* Type-specific Neon Glow */
 .toast-item.success {
-  background: rgba(50, 215, 75, 0.15); /* --color-success tinted */
+  background: linear-gradient(90deg, rgba(50, 215, 75, 0.1), rgba(50, 215, 75, 0.05));
   border-color: rgba(50, 215, 75, 0.3);
+  box-shadow: 0 4px 15px rgba(50, 215, 75, 0.2), var(--glass-shadow-inner);
 }
-.toast-item.success .icon {
-  color: var(--color-success);
-}
+.toast-item.success .icon { color: #32D74B; }
 
 .toast-item.error {
-  background: rgba(255, 69, 58, 0.15); /* --color-danger tinted */
+  background: linear-gradient(90deg, rgba(255, 69, 58, 0.1), rgba(255, 69, 58, 0.05));
   border-color: rgba(255, 69, 58, 0.3);
+  box-shadow: 0 4px 15px rgba(255, 69, 58, 0.2), var(--glass-shadow-inner);
 }
-.toast-item.error .icon {
-  color: var(--color-danger);
-}
+.toast-item.error .icon { color: #FF453A; }
 
 .toast-item.warning {
-  background: rgba(255, 214, 10, 0.15); /* --color-warning tinted */
+  background: linear-gradient(90deg, rgba(255, 214, 10, 0.1), rgba(255, 214, 10, 0.05));
   border-color: rgba(255, 214, 10, 0.3);
+  box-shadow: 0 4px 15px rgba(255, 214, 10, 0.2), var(--glass-shadow-inner);
 }
-.toast-item.warning .icon {
-  color: var(--color-warning);
-}
+.toast-item.warning .icon { color: #FFD60A; }
 
 .toast-item.info {
-  background: rgba(10, 132, 255, 0.15); /* --color-info tinted */
+  background: linear-gradient(90deg, rgba(10, 132, 255, 0.1), rgba(10, 132, 255, 0.05));
   border-color: rgba(10, 132, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(10, 132, 255, 0.2), var(--glass-shadow-inner);
 }
-.toast-item.info .icon {
-  color: var(--color-info);
-}
+.toast-item.info .icon { color: #0A84FF; }
 
 .icon {
   display: flex;
@@ -165,29 +154,30 @@ const { toasts, remove } = useToast()
   line-height: 1.5;
 }
 
-/* Hover Effect */
-.toast-item:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 
-    0 12px 24px rgba(0, 0, 0, 0.12),
-    var(--glass-shadow-inner);
+/* Transitions - Bouncy Spring */
+.toast-enter-active {
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-
-/* Transitions */
-.toast-enter-active,
 .toast-leave-active {
-  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1); /* Apple-like spring */
+  transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+  position: absolute;
+  left: 0; /* Anchor to container */
+  /* Ensure it doesn't shrink when absolute */
+  width: 100%; 
+  z-index: -1;
+}
+.toast-move {
+  transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .toast-enter-from {
   opacity: 0;
-  transform: translateY(-40px) scale(0.9);
-  filter: blur(10px);
+  transform: translateY(-30px) scale(0.9) rotateX(-10deg);
 }
 
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(-20px) scale(0.95);
-  filter: blur(10px);
+  transform: translateY(-30px) scale(0.9);
+  /* filter: blur(8px); Removed blur to improve performance/glitchiness */
 }
 </style>

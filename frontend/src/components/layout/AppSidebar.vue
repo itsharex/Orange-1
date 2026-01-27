@@ -71,7 +71,25 @@ const systemItems = [
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 20px;
-  color: var(--text-primary);
+  /* Liquid Metal Shimmer */
+  background: linear-gradient(
+    110deg, 
+    var(--text-primary) 30%, 
+    rgba(255, 255, 255, 0.8) 45%, 
+    rgba(255, 255, 255, 0.8) 55%, 
+    var(--text-primary) 70%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: logoShimmer 6s ease-in-out infinite;
+  will-change: background-position;
+}
+
+@keyframes logoShimmer {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: -100% 0; }
 }
 </style>
 

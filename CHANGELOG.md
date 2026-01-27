@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0] - 2026-01-27
+
+### Added
+
+- **UI**: Implemented "Living Light" interactive cursor effects, adding dynamic ambient lighting and specular reflections to the background and glass cards.
+
+### Changed
+
+- **UI**: "Ultra-Deep Liquid Glass" aesthetic overhaul.
+  - **Sidebar**: Enhanced active states with "Neon Prism" glow and "Liquid Metal" logo shimmer.
+  - **Header**: Redesigned dropdowns with deeper glass material and "Shift" hover effects.
+  - **Global**: Refined glass materials, button physics, and input focus states ("Breathing Neon").
+
+### Fixed
+
+- **UI**: Fixed toast notification disappearance animation glitch by enforcing container constraints and optimizing transition properties.
+
 ## [0.5.0] - 2026-01-25
 
 ### Added
