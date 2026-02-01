@@ -47,3 +47,5 @@ cover.out
 # Agent
 .agent/
 .ai_memory/
+
+AGENTS.md

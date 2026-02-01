@@ -135,13 +135,6 @@ async function handleRegister() {
       <div class="shape"></div>
     </div>
 
-    <!-- 返回按钮 -->
-    <!-- <router-link to="/" class="back-btn">
-      <i class="ri-arrow-left-line"></i>
-      返回首页
-    </router-link> -->
-    <!-- 既然 Login 是单独页面，通常不返回首页 unless home is public. Here / is dashboard protected -->
-
     <!-- 主题切换 -->
     <button class="theme-toggle-btn" @click="themeStore.toggleTheme" title="切换主题">
       <i :class="themeStore.effectiveTheme === 'dark' ? 'ri-moon-line' : 'ri-sun-line'"></i>
@@ -208,19 +201,6 @@ async function handleRegister() {
               {{ authStore.loading ? '登录中...' : '登录' }}
             </button>
           </form>
-
-          <div class="divider"><span>或</span></div>
-
-          <div class="social-login">
-            <button class="social-btn wechat">
-              <i class="ri-wechat-fill"></i>
-              微信
-            </button>
-            <button class="social-btn apple">
-              <i class="ri-apple-fill"></i>
-              Apple
-            </button>
-          </div>
         </div>
 
         <!-- 注册表单 -->

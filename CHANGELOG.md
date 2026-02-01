@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1] - 2026-02-01
+
+### Changed
+
+- **UI**: Added global scrollbar styling with theme-aware colors (light/dark mode support).
+- **UI**: Enhanced form input focus states for dark mode with proper background color.
+
+### Removed
+
+- **Login**: Removed WeChat and Apple social login buttons from the login page.
+- **Login**: Cleaned up commented-out "back to home" button code.
+
 ## [0.6.0] - 2026-01-27
 
 ### Added
