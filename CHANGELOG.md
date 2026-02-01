@@ -103,6 +103,13 @@
 - **UI**: Fixed disappearing select arrows in dark mode for all settings modals.
 - **Performance**: Fixed user list not refreshing immediately after creating a new user.
 
+## [0.6.2] - 2026-02-01
+
+### Fixed
+
+- **UI**: Fixed login and registration page input icons visibility in dark mode (forced white color and z-index).
+- **UI**: Fixed alignment of icons in registration form (restored absolute positioning).
+
 ## [0.2.2] - 2026-01-11
 
 ### Added

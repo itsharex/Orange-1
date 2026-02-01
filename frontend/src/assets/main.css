@@ -472,3 +472,31 @@ input:focus, textarea:focus, select:focus {
   background: var(--color-primary);
   color: white;
 }
+
+/* Global Fix for Login Icons */
+.login-icon-override {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: rgba(100, 100, 100, 0.5);
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+  pointer-events: none;
+  z-index: 50 !important;
+}
+
+[data-theme='dark'] .login-icon-override {
+  color: #FFFFFF !important;
+  opacity: 1 !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+}
+
+.input-wrapper input:focus ~ .login-icon-override,
+.input-wrapper:focus-within .login-icon-override {
+  color: #FF9F0A !important;
+  transform: translateY(-50%) scale(1.15);
+  filter: drop-shadow(0 0 6px rgba(255, 159, 10, 0.8));
+  opacity: 1 !important;
+}
