@@ -19,6 +19,7 @@ import { notificationApi, type Notification, type UserBrief } from '@/api/notifi
 import NotificationDetailModal from '@/components/notification/NotificationDetailModal.vue'
 import UserManagement from '@/views/settings/UserManagement.vue'
 import DataSyncPanel from '@/components/settings/DataSyncPanel.vue'
+import TokenManagement from '@/components/settings/TokenManagement.vue'
 import GlassCard from '@/components/common/GlassCard.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
@@ -86,6 +87,7 @@ const settingsNav = computed(() => {
     { key: 'data-sync', icon: 'ri-cloud-line', label: '数据同步' },
     { key: 'appearance', icon: 'ri-palette-line', label: '外观设置' },
     { key: 'notification', icon: 'ri-notification-3-line', label: '通知设置' },
+    { key: 'developer', icon: 'ri-terminal-box-line', label: '开发设置' },
     { key: 'about', icon: 'ri-information-line', label: '关于' },
   ]
   
@@ -754,6 +756,14 @@ onMounted(() => {
       v-else-if="activeTab === 'data-sync'"
     >
       <DataSyncPanel />
+    </GlassCard>
+
+    <!-- Developer Settings (Token Management) -->
+    <GlassCard
+      v-else-if="activeTab === 'developer'"
+      class="h-[600px] flex flex-col p-0 overflow-hidden"
+    >
+      <TokenManagement />
     </GlassCard>
 
 

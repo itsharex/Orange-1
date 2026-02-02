@@ -160,3 +160,27 @@ type UserNotification struct {
 func (UserNotification) TableName() string {
 	return "user_notifications"
 }
+
+// PersonalAccessToken 个人访问令牌
+// 用于开发者或者第三方应用访问 API。
+// Token 只在创建时返回一次，数据库只存储 Hash 值。
+type PersonalAccessToken struct {
+	ID         int64      `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserID     int64      `json:"user_id" gorm:"not null;index"`     // 关联用户ID
+	Name       string     `json:"name" gorm:"size:50;not null"`      // 令牌名称 (用途描述)
+	TokenHash  string     `json:"-" gorm:"size:100;not null;index"`  // 令牌 Hash (SHA256)
+	Scopes     string     `json:"scopes" gorm:"size:255;default:''"` // 权限范围 (暂留，逗号分隔)
+	Status     int        `json:"status" gorm:"default:1"`           // 状态: 1=正常, 0=撤销
+	LastUsedAt *time.Time `json:"last_used_at"`                      // 最后使用时间
+	ExpiresAt  *time.Time `json:"expires_at"`                        // 过期时间 (Null 表示永不过期)
+	CreateTime time.Time  `json:"create_time" gorm:"autoCreateTime"` // 创建时间
+	UpdateTime time.Time  `json:"update_time" gorm:"autoUpdateTime"` // 更新时间
+
+	// 关联
+	User *User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// TableName 指定表名
+func (PersonalAccessToken) TableName() string {
+	return "personal_access_tokens"
+}

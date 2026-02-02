@@ -23,6 +23,10 @@ type Config struct {
 	DBSSLMode    string // SSL 模式: disable (本地), require (云数据库)
 	DBAutoCreate bool   // 是否自动创建数据库 (本地 true, 云托管 false)
 
+	// API 服务配置
+	APIServerPort   int  // 对外 API 服务端口 (默认 3456)
+	EnableAPIServer bool // 是否启用对外 API 服务
+
 	JWTSecret     string // JWT 签名密钥
 	TokenExpiry   int64  // Token 有效期 (单位: 小时)
 	LogEnable     bool   // 是否启用请求日志
@@ -89,6 +93,9 @@ func Load() {
 		DBName:       getEnv("DB_NAME", "orange"),
 		DBSSLMode:    getEnv("DB_SSL_MODE", "disable"),
 		DBAutoCreate: getEnvBool("DB_AUTO_CREATE", true),
+
+		APIServerPort:   int(getEnvInt("API_SERVER_PORT", 3456)),
+		EnableAPIServer: getEnvBool("ENABLE_API_SERVER", true),
 
 		JWTSecret:     getEnv("JWT_SECRET", "orange-secret-key-change-in-production"),
 		TokenExpiry:   getEnvInt("TOKEN_EXPIRY", 24),

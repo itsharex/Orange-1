@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	_ "embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"log/slog"
@@ -34,9 +35,10 @@ func init() {
 // createAssetHandler 创建一个组合处理器，用于统一处理 HTTP 请求：
 // 1. 将 /api/* 开头的请求路由到 Gin 框架处理 (后端接口)
 // 2. 将其他请求作为静态资源服务，从嵌入的文件系统中提供前端页面
-func createAssetHandler() http.Handler {
-	// 创建 Gin 路由器用于处理 API 端点
-	ginRouter := router.NewRouter()
+// createAssetHandler 创建一个组合处理器，用于统一处理 HTTP 请求：
+// 1. 将 /api/* 开头的请求路由到 Gin 框架处理 (后端接口)
+// 2. 将其他请求作为静态资源服务，从嵌入的文件系统中提供前端页面
+func createAssetHandler(ginRouter http.Handler) http.Handler {
 
 	// 获取嵌入的前端静态资源
 	frontendFS, err := fs.Sub(assets, "frontend/dist")
@@ -67,7 +69,7 @@ func main() {
 	logger.Setup()
 	defer logger.Sync()
 
-	slog.Info("Application starting...", "version", "v0.1.7")
+	slog.Info("Application starting...", "version", "v0.7.0")
 
 	// 3. 设置全局 Panic 捕获与恢复
 	defer func() {
@@ -95,6 +97,7 @@ func main() {
 		&models.DictionaryItem{},
 		&models.Notification{},
 		&models.UserNotification{},
+		&models.PersonalAccessToken{},
 	)
 
 	// 播种初始化数据 (如默认用户、字典等)
@@ -104,8 +107,25 @@ func main() {
 
 	defer database.Close()
 
-	// 6. 创建组合资源处理器 (API + 前端静态资源)
-	assetHandler := createAssetHandler()
+	defer database.Close()
+
+	// 6. 初始化 Gin 路由器 (API 处理器)
+	ginRouter := router.NewRouter()
+
+	// 7. 启动对外 API 服务 (如果启用)
+	if config.AppConfig.EnableAPIServer {
+		go func() {
+			port := config.AppConfig.APIServerPort
+			log.Printf("Starting external API server on :%d\n", port)
+			// 使用 ginRouter 作为一个普通的 http.Handler
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", port), ginRouter); err != nil {
+				log.Printf("Error starting API server: %v\n", err)
+			}
+		}()
+	}
+
+	// 8. 创建组合资源处理器 (API + 前端静态资源)
+	assetHandler := createAssetHandler(ginRouter)
 
 	// 7. 创建 Wails 应用程序实例
 	// 配置项说明:

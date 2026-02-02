@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0] - 2026-02-02
+
+### Added
+
+- **Feature**: Implemented Personal Access Token (PAT) system for external API access.
+  - Added "Developer Settings" tab in System Settings.
+  - Added Backend support for Token generation, hashing, and management.
+  - Added new API endpoints: `/api/v1/tokens` (Create, List, Revoke, Delete).
+- **Network**: Added support for external API access via a dedicated HTTP server (Default port: 3456).
+  - Port is configurable via `API_SERVER_PORT`.
+
+### Fixed
+
+- **Internal**: Fixed user association issue when creating tokens.
+
 ## [0.6.2] - 2026-02-01
 
 ### Fixed

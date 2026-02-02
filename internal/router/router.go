@@ -127,6 +127,16 @@ func NewRouter() *gin.Engine {
 				notifications.DELETE("/:id", notificationHandler.Delete)            // 删除通知
 			}
 
+			// 个人访问令牌模块
+			tokens := authorized.Group("/tokens")
+			{
+				tokenHandler := handler.NewTokenHandler()
+				tokens.POST("", tokenHandler.Create)            // 创建令牌
+				tokens.GET("", tokenHandler.List)               // 令牌列表
+				tokens.POST("/:id/revoke", tokenHandler.Revoke) // 撤销令牌 (软删/禁用)
+				tokens.DELETE("/:id", tokenHandler.Delete)      // 删除令牌 (硬删)
+			}
+
 			// 系统级功能模块
 			system := authorized.Group("/system")
 			{
