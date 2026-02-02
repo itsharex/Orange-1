@@ -116,7 +116,7 @@ func (s *SyncService) CompareData(cfg SyncConfig) ([]TableCompareResult, error) 
 	localDB := database.GetDB()
 
 	// 要对比的表
-	tables := []string{"users", "projects", "payments", "dictionaries", "dictionary_item", "notifications", "user_notifications"}
+	tables := []string{"users", "projects", "payments", "dictionaries", "dictionary_item", "notifications", "user_notifications", "personal_access_tokens"}
 	results := make([]TableCompareResult, 0, len(tables))
 
 	for _, table := range tables {
@@ -179,6 +179,8 @@ func (s *SyncService) SyncTables(cfg SyncConfig, tables []string) ([]SyncResult,
 			result.SyncedCount, result.ErrorMessage = s.syncNotifications(localDB, remoteDB, cfg.DBType)
 		case "user_notifications":
 			result.SyncedCount, result.ErrorMessage = s.syncUserNotifications(localDB, remoteDB, cfg.DBType)
+		case "personal_access_tokens":
+			result.SyncedCount, result.ErrorMessage = s.syncPersonalAccessTokens(localDB, remoteDB, cfg.DBType)
 		default:
 			result.ErrorMessage = "未知表名"
 		}
@@ -393,6 +395,30 @@ func (s *SyncService) syncUserNotifications(localDB *gorm.DB, remoteDB *sql.DB, 
 	}
 
 	return int64(len(userNotifications)), ""
+}
+
+// syncPersonalAccessTokens 同步个人访问令牌表
+func (s *SyncService) syncPersonalAccessTokens(localDB *gorm.DB, remoteDB *sql.DB, dbType string) (int64, string) {
+	var tokens []models.PersonalAccessToken
+	if err := localDB.Find(&tokens).Error; err != nil {
+		return 0, fmt.Sprintf("读取本地数据失败: %v", err)
+	}
+
+	var ids []interface{}
+	for _, t := range tokens {
+		ids = append(ids, t.ID)
+		query := s.buildUpsertQuery("personal_access_tokens", []string{"id", "user_id", "name", "token_hash", "scopes", "status", "last_used_at", "expires_at", "create_time", "update_time"}, dbType)
+		_, err := remoteDB.Exec(query, t.ID, t.UserID, t.Name, t.TokenHash, t.Scopes, t.Status, t.LastUsedAt, t.ExpiresAt, t.CreateTime, t.UpdateTime)
+		if err != nil {
+			return 0, fmt.Sprintf("同步失败: %v", err)
+		}
+	}
+
+	if err := s.deleteExtras(remoteDB, "personal_access_tokens", ids, dbType); err != nil {
+		fmt.Printf("清理 personal_access_tokens 多余数据失败: %v\n", err)
+	}
+
+	return int64(len(tokens)), ""
 }
 
 // buildUpsertQuery 构建 UPSERT 语句 (支持 PostgreSQL 和 MySQL)

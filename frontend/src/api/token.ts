@@ -28,7 +28,7 @@ export interface CreateTokenResponse {
 export const tokenApi = {
   // 获取令牌列表
   list: () =>
-    api.get<ApiResponse<PersonalAccessToken[]>>('/tokens'),
+    api.get<ApiResponse<PersonalAccessToken[]>>('/tokens', { params: { _t: new Date().getTime() } }),
 
   // 创建令牌
   create: (data: CreateTokenRequest) =>

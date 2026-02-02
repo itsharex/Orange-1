@@ -69,7 +69,7 @@ func main() {
 	logger.Setup()
 	defer logger.Sync()
 
-	slog.Info("Application starting...", "version", "v0.7.0")
+	slog.Info("Application starting...", "version", "v0.7.1")
 
 	// 3. 设置全局 Panic 捕获与恢复
 	defer func() {

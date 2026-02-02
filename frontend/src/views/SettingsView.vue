@@ -761,7 +761,7 @@ onMounted(() => {
     <!-- Developer Settings (Token Management) -->
     <GlassCard
       v-else-if="activeTab === 'developer'"
-      class="h-[600px] flex flex-col p-0 overflow-hidden"
+      class="h-full"
     >
       <TokenManagement />
     </GlassCard>

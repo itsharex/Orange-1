@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.1] - 2026-02-02
+
+### Changed
+
+- **UI**: Improved "Developer Settings" UI with better layout, icons, and responsive design.
+- **UI**: Enhanced token list display with "Active" and "Revoked" sections.
+- **Sys**: Added `personal_access_tokens` table to Data Sync service for cloud synchronization.
+
+### Fixed
+
+- **API**: Fixed token list caching issue by adding timestamp parameter to requests.
+- **UI**: Fixed missing icon in "Revoked Tokens" section.
+
 ## [0.7.0] - 2026-02-02
 
 ### Added
