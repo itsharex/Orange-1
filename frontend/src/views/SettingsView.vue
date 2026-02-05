@@ -1,29 +1,18 @@
-<!--
- * @file SettingsView.vue
- * @description 系统设置视图
- * 
- * 主要功能：
- * 1. 个人信息管理 (Profile)：修改昵称、职位、联系方式
- * 2. 字典管理 (Dictionary)：管理员维护各类业务字典
- * 3. 安全设置 (Security)：修改密码
- * 4. 通知管理 (Notification)：查看系统消息，管理员可发送通知
- * 5. 关于 (About)：检查版本更新
- -->
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import api from '@/api'
-import { dictionaryApi, type Dictionary, type DictionaryItem } from '@/api/dictionary'
-import { notificationApi, type Notification, type UserBrief } from '@/api/notification'
-import NotificationDetailModal from '@/components/notification/NotificationDetailModal.vue'
-import UserManagement from '@/views/settings/UserManagement.vue'
+
+import UserManagement from '@/components/settings/UserManagement.vue'
 import DataSyncPanel from '@/components/settings/DataSyncPanel.vue'
 import TokenManagement from '@/components/settings/TokenManagement.vue'
+import NotificationManagement from '@/components/settings/NotificationManagement.vue'
+import DictionaryManagement from '@/components/settings/DictionaryManagement.vue'
 import GlassCard from '@/components/common/GlassCard.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
-import { Browser, Events } from '@wailsio/runtime'
+import { Browser } from '@wailsio/runtime'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import pkg from '../../package.json'
@@ -46,31 +35,7 @@ watch(() => route.query.tab, (newTab) => {
 // Update route when tab changes
 watch(activeTab, (newTab) => {
   router.replace({ query: { ...route.query, tab: newTab } })
-  
-  if (newTab === 'notification') {
-    loadNotifications()
-    if (isAdmin.value) {
-      loadTargetUsers()
-    }
-  }
 })
-
-// Watch route id for deep linking to notification detail
-watch(() => route.query.id, async (newId) => {
-  if (newId && activeTab.value === 'notification') {
-    const id = parseInt(newId as string)
-    if (!isNaN(id)) {
-      try {
-        const res = await notificationApi.get(id)
-        if (res.data.code === 0) {
-          viewNotificationDetail(res.data.data)
-        }
-      } catch (error) {
-        console.error('Failed to load notification detail:', error)
-      }
-    }
-  }
-}, { immediate: true })
 
 const authStore = useAuthStore()
 
@@ -82,7 +47,7 @@ const settingsNav = computed(() => {
   const items = [
     { key: 'profile', icon: 'ri-user-line', label: '个人信息' },
     // Admin only
-    ...(isAdmin.value ? [{ key: 'users', icon: 'ri-admin-line', label: '用户管理' }] : []),
+    ...(isAdmin.value ? [{ key: 'users', icon: 'ri-team-line', label: '用户管理' }] : []),
     { key: 'security', icon: 'ri-lock-line', label: '安全设置' },
     { key: 'data-sync', icon: 'ri-cloud-line', label: '数据同步' },
     { key: 'appearance', icon: 'ri-palette-line', label: '外观设置' },
@@ -183,354 +148,11 @@ const saveProfile = async () => {
   }
 }
 
-// ============ 字典管理逻辑 ============
-const activeDictId = ref<string>('') // 选中的字典 Code
-const dictionaries = ref<Dictionary[]>([])
-const activeDictItems = ref<DictionaryItem[]>([])
-
-// Fetch dictionary list
-const fetchDictionaries = async () => {
-  try {
-    const res = await dictionaryApi.list()
-    if (res.data.code === 0) {
-      dictionaries.value = res.data.data
-      if (dictionaries.value.length > 0 && !activeDictId.value) {
-        const firstDict = dictionaries.value[0]
-        if (firstDict) {
-          activeDictId.value = firstDict.code
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Failed to fetch dictionaries:', error)
-  }
-}
-
-// Fetch items for selected dictionary
-const fetchDictItems = async (code: string) => {
-  if (!code) return
-  try {
-    const res = await dictionaryApi.getItems(code)
-    if (res.data.code === 0) {
-      activeDictItems.value = res.data.data
-    }
-  } catch (error) {
-    console.error(`Failed to fetch items for ${code}:`, error)
-  }
-}
-
-// Watch active dictionary selection change
-watch(activeDictId, (newCode) => {
-  if (newCode) {
-    fetchDictItems(newCode)
-  }
-})
-
-// Modal Logic
-const showModal = ref(false)
-const isEditing = ref(false)
-const modalForm = ref({
-  id: 0,
-  label: '',
-  value: '',
-  sort: 0
-})
-
-const openAddModal = () => {
-  isEditing.value = false
-  modalForm.value = { id: 0, label: '', value: '', sort: activeDictItems.value.length + 1 }
-  showModal.value = true
-}
-
-const openEditModal = (item: DictionaryItem) => {
-  isEditing.value = true
-  modalForm.value = {
-    id: item.id,
-    label: item.label,
-    value: item.value,
-    sort: item.sort
-  }
-  showModal.value = true
-}
-
-const handleModalSubmit = async () => {
-  if (!activeDictId.value) return
-  
-  const label = modalForm.value.label.trim()
-  const value = modalForm.value.value.trim()
-  
-  if (!label || !value) {
-    toast.warning('请输入名称和值')
-    return
-  }
-  
-  try {
-    let res
-    if (isEditing.value) {
-      res = await dictionaryApi.updateItem(activeDictId.value, modalForm.value.id, {
-        label,
-        value,
-        sort: modalForm.value.sort
-      })
-    } else {
-      res = await dictionaryApi.createItem(activeDictId.value, {
-        label,
-        value,
-        sort: modalForm.value.sort
-      })
-    }
-    
-    if (res.data.code === 0) {
-      toast.success(isEditing.value ? '修改成功' : '添加成功')
-      showModal.value = false
-      fetchDictItems(activeDictId.value)
-    } else {
-      toast.error(`${isEditing.value ? '修改' : '添加'}失败: ${res.data.message}`)
-    }
-  } catch (error) {
-    console.error('Failed to save item:', error)
-    toast.error(isEditing.value ? '修改失败' : '添加失败')
-  }
-}
-
-const deleteDictItem = async (id: number) => {
-  if (!activeDictId.value) return
-  const confirmed = await confirm('确定要删除这个选项吗？')
-  if (confirmed) {
-    try {
-      const res = await dictionaryApi.deleteItem(activeDictId.value, id)
-      if (res.data.code === 0) {
-        await fetchDictItems(activeDictId.value)
-        toast.success('删除成功')
-      }
-    } catch (error) {
-      console.error('Failed to delete item:', error)
-      toast.error('删除失败')
-    }
-  }
-}
 
 
 
-// ============ 通知管理逻辑 (通用 + 管理员) ============
-const notifications = ref<Notification[]>([])
-const notificationTotal = ref(0)
-const targetUsers = ref<UserBrief[]>([]) // 发送通知时的目标用户列表
-const notificationLoading = ref(false)
-const showCreateNotificationModal = ref(false)
-const creatingNotification = ref(false)
-const newNotification = ref({
-  title: '',
-  content: '',
-  type: 'system',
-  target_user_id: 0,
-})
-
-// 分页状态
-const notificationCurrentPage = ref(1)
-const notificationPageSize = ref(5)
-
-// 详情/编辑弹窗状态
-const showNotificationDetailModal = ref(false)
-const selectedNotification = ref<Notification | null>(null)
-const isEditingNotification = ref(false)
-
-// 简单的权限判断 (从 authStore 获取) - 已移至顶部
 
 
-// 分页计算
-const notificationTotalPages = computed(() => Math.ceil(notificationTotal.value / notificationPageSize.value))
-
-const notificationPaginationInfo = computed(() => {
-  const total = notificationTotal.value
-  if (total === 0) return '暂无数据'
-  const start = (notificationCurrentPage.value - 1) * notificationPageSize.value + 1
-  const end = Math.min(notificationCurrentPage.value * notificationPageSize.value, total)
-  return `显示 ${start}-${end} 条，共 ${total} 条`
-})
-
-// 分页操作
-const notificationPrevPage = () => {
-  if (notificationCurrentPage.value > 1) {
-    notificationCurrentPage.value--
-    loadNotifications()
-  }
-}
-
-const notificationNextPage = () => {
-  if (notificationCurrentPage.value < notificationTotalPages.value) {
-    notificationCurrentPage.value++
-    loadNotifications()
-  }
-}
-
-const notificationGoToPage = (page: number) => {
-  notificationCurrentPage.value = page
-  loadNotifications()
-}
-
-// 监听 pageSize 变化重置页码
-watch(notificationPageSize, () => {
-  notificationCurrentPage.value = 1
-  loadNotifications()
-})
-
-const loadNotifications = async () => {
-  notificationLoading.value = true
-  try {
-    const res = await notificationApi.list(notificationCurrentPage.value, notificationPageSize.value)
-    if (res.data.code === 0) {
-      notifications.value = res.data.data.list
-      notificationTotal.value = res.data.data.total
-    }
-  } catch (error) {
-    console.error('Failed to load notifications:', error)
-  } finally {
-    notificationLoading.value = false
-  }
-}
-
-const loadTargetUsers = async () => {
-  try {
-    const res = await notificationApi.getUsers()
-    if (res.data.code === 0) {
-      targetUsers.value = res.data.data
-    }
-  } catch (error) {
-    console.error('Failed to load users:', error)
-  }
-}
-
-const handleCreateNotification = async () => {
-  if (!newNotification.value.title || !newNotification.value.content) {
-    toast.error('请填写标题和内容')
-    return
-  }
-  creatingNotification.value = true
-  try {
-    const res = await notificationApi.create(newNotification.value)
-    if (res.data.code === 0) {
-      toast.success('发送成功')
-      showCreateNotificationModal.value = false
-      newNotification.value = { title: '', content: '', type: 'system', target_user_id: 0 }
-      loadNotifications()
-    } else {
-      toast.error(res.data.message || '发送失败')
-    }
-  } catch (error) {
-    console.error('Failed to create notification:', error)
-    toast.error('发送失败')
-  } finally {
-    creatingNotification.value = false
-  }
-}
-
-const handleDeleteNotification = async (id: number) => {
-  const confirmed = await confirm({ title: '确认删除', message: '确定要删除这条通知吗？' })
-  if (confirmed) {
-    try {
-      const res = await notificationApi.delete(id)
-      if (res.data.code === 0) {
-        toast.success('删除成功')
-        loadNotifications()
-      }
-    } catch (error) {
-      console.error('Failed to delete notification:', error)
-      toast.error('删除失败')
-    }
-  }
-}
-
-// 查看详情（自动标记已读）
-const viewNotificationDetail = async (notification: Notification) => {
-  selectedNotification.value = notification
-  isEditingNotification.value = false
-  showNotificationDetailModal.value = true
-  
-  // 仅针对未读通知进行标记
-  if (!notification.is_read) {
-    try {
-      await notificationApi.markAsRead(notification.id)
-      notification.is_read = true // 本地更新状态
-      Events.Emit('notification_updated') // 通知 Header 更新数量
-    } catch (error) {
-      console.error('Mark as read failed', error)
-    }
-  }
-}
-
-// 编辑通知
-const editNotification = (notification: Notification) => {
-  // 类型转换 int -> string
-  let typeStr = 'system'
-  if (notification.type === 2) typeStr = 'activity'
-  
-  newNotification.value = {
-    title: notification.title,
-    content: notification.content,
-    type: typeStr,
-    target_user_id: notification.is_global === 1 ? 0 : 0 // 默认为0，因为私信我们无法轻易获取原目标用户ID
-  }
-  selectedNotification.value = notification
-  isEditingNotification.value = true
-  showCreateNotificationModal.value = true
-}
-
-const handleUpdateNotification = async () => {
-    if (!selectedNotification.value) return 
-
-    if (!newNotification.value.title || !newNotification.value.content) {
-      toast.error('请填写标题和内容')
-      return
-    }
-    
-    creatingNotification.value = true
-    try {
-      const res = await notificationApi.update(selectedNotification.value.id, newNotification.value)
-      if (res.data.code === 0) {
-        toast.success('更新成功')
-        showCreateNotificationModal.value = false
-        loadNotifications()
-      } else {
-        toast.error(res.data.message || '更新失败')
-      }
-    } catch (error) {
-      console.error('Failed to update notification:', error)
-      toast.error('更新失败')
-    } finally {
-      creatingNotification.value = false
-    }
-}
-
-
-
-// ...
-
-// Template changes (Permission guards)
-/*
-    <GlassCard v-else-if="activeTab === 'notification'">
-      <div class="glass-card-header border-b border-color-border p-md flex justify-between items-center">
-        <h3 class="glass-card-title">通知管理</h3>
-        <button v-if="isAdmin" class="btn btn-primary btn-sm" @click="showCreateNotificationModal = true">
-          <i class="ri-add-line mr-2"></i>发送通知
-        </button>
-      </div>
-      ...
-          <div
-            v-for="notification in notifications" 
-            :key="notification.id"
-            ...
-          >
-            ...
-            <div class="notification-actions" v-if="isAdmin">
-              <button class="btn btn-ghost btn-sm" @click.stop="editNotification(notification)" title="编辑">
-                <i class="ri-edit-line"></i>
-              </button>
-              <button class="btn btn-ghost btn-sm text-danger" @click.stop="handleDeleteNotification(notification.id)" title="删除">
-                <i class="ri-delete-bin-line"></i>
-              </button>
-            </div>
-*/
 
 // ============ Appearance Logic ============
 const themeStore = useThemeStore()
@@ -627,15 +249,7 @@ const checkUpdate = async () => {
 
 onMounted(() => {
   fetchProfile()
-  fetchDictionaries()
-  
-  // Initial load for notification tab
-  if (activeTab.value === 'notification') {
-    loadNotifications()
-    if (isAdmin.value) {
-      loadTargetUsers()
-    }
-  }
+
 })
 </script>
 
@@ -659,31 +273,52 @@ onMounted(() => {
     </GlassCard>
 
     <!-- Main Content Area -->
-    <GlassCard v-if="activeTab === 'profile'">
-      <div class="glass-card-header border-b border-color-border p-md flex justify-between items-center">
-        <h3 class="glass-card-title">个人信息</h3>
-        <button class="btn btn-primary btn-sm" @click="saveProfile">保存更改</button>
-      </div>
-      <div class="profile-form">
-        <div>
-          <label class="form-label">姓名</label>
-          <input type="text" v-model="profile.name" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+    <GlassCard v-if="activeTab === 'profile'" class="profile-card" no-padding>
+      <div class="profile-panel">
+        <!-- 头部区域 -->
+        <div class="dev-header">
+          <div class="dev-header-content">
+            <div class="dev-title-section">
+              <div class="dev-icon-wrapper">
+                <i class="ri-user-3-line"></i>
+              </div>
+              <div class="dev-title-info">
+                <h2 class="dev-title">个人信息</h2>
+                <p class="dev-subtitle">管理您的个人资料和联系方式</p>
+              </div>
+            </div>
+            <!-- 右上角按钮 -->
+            <button class="dev-create-btn" @click="saveProfile">
+              <i class="ri-save-line"></i>
+              <span>保存更改</span>
+            </button>
+          </div>
         </div>
-        <div>
-          <label class="form-label">职位</label>
-          <input type="text" v-model="profile.position" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
-        </div>
-        <div>
-          <label class="form-label">邮箱</label>
-          <input type="email" v-model="profile.email" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
-        </div>
-        <div>
-          <label class="form-label">手机</label>
-          <input type="tel" v-model="profile.phone" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
-        </div>
-        <div class="col-span-2">
-          <label class="form-label">部门</label>
-          <input type="text" v-model="profile.department" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+
+        <!-- 表单区域 -->
+        <div class="dev-content">
+          <div class="profile-form-grid">
+            <div class="form-group">
+              <label class="form-label">姓名</label>
+              <input type="text" v-model="profile.name" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">职位</label>
+              <input type="text" v-model="profile.position" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">邮箱</label>
+              <input type="email" v-model="profile.email" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">手机</label>
+              <input type="tel" v-model="profile.phone" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+            </div>
+            <div class="form-group form-group-full">
+              <label class="form-label">部门</label>
+              <input type="text" v-model="profile.department" class="form-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" />
+            </div>
+          </div>
         </div>
       </div>
     </GlassCard>
@@ -697,63 +332,19 @@ onMounted(() => {
     </GlassCard>
 
     <!-- Dictionary Management -->
+    <!-- Dictionary Management -->
     <GlassCard
       v-else-if="activeTab === 'dictionary'"
-      class="h-[600px] flex flex-col p-0 overflow-hidden"
+      class="flex flex-col p-0"
     >
-      <div class="glass-card-header border-b border-color-border p-md flex justify-between items-center">
-        <h3 class="glass-card-title">字典管理</h3>
-        <button class="btn btn-primary btn-sm" @click="openAddModal">
-          <i class="ri-add-line"></i> 新增条目
-        </button>
-      </div>
-      <div class="dict-layout flex-1 overflow-hidden">
-        <!-- Left: Categories -->
-        <div class="dict-sidebar">
-          <div
-            v-for="dict in dictionaries"
-            :key="dict.id"
-            class="dict-nav-item"
-            :class="{ active: activeDictId === dict.code }"
-            @click="activeDictId = dict.code"
-          >
-            {{ dict.name }}
-          </div>
-        </div>
-        <!-- Right: Items -->
-        <div class="dict-content">
-          <div class="dict-list">
-            <div v-for="item in activeDictItems" :key="item.id" class="dict-item">
-              <div class="flex flex-col">
-                 <span class="font-medium">{{ item.label }}</span>
-                 <span class="text-xs text-secondary">{{ item.value }}</span>
-              </div>
-              <div class="flex gap-2">
-                <button
-                  class="btn btn-ghost btn-icon btn-sm text-primary"
-                  @click="openEditModal(item)"
-                >
-                  <i class="ri-edit-line"></i>
-                </button>
-                <button
-                  class="btn btn-ghost btn-icon btn-sm text-danger"
-                  @click="deleteDictItem(item.id)"
-                >
-                  <i class="ri-delete-bin-line"></i>
-                </button>
-              </div>
-            </div>
-            <div v-if="activeDictItems.length === 0" class="text-secondary text-sm text-center py-4">
-               暂无数据
-            </div>
-          </div>
-        </div>
-      </div>
+      <DictionaryManagement />
     </GlassCard>
 
     <!-- Data Sync Panel -->
     <GlassCard
       v-else-if="activeTab === 'data-sync'"
+      class="h-full"
+      no-padding
     >
       <DataSyncPanel />
     </GlassCard>
@@ -762,6 +353,7 @@ onMounted(() => {
     <GlassCard
       v-else-if="activeTab === 'developer'"
       class="h-full"
+      no-padding
     >
       <TokenManagement />
     </GlassCard>
@@ -769,157 +361,100 @@ onMounted(() => {
 
 
     <!-- Security Settings -->
-    <GlassCard v-else-if="activeTab === 'security'">
-      <div class="glass-card-header border-b border-color-border p-md flex justify-between items-center">
-        <h3 class="glass-card-title">安全设置</h3>
-        <button class="btn btn-primary btn-sm" @click="handlePasswordChange">修改密码</button>
-      </div>
-      <div class="security-form p-md">
-        <div class="form-group mb-md">
-          <label class="form-label">当前密码</label>
-          <input
-            type="password"
-            v-model="securityForm.oldPassword"
-            class="form-input"
-            placeholder="请输入当前密码"
-            spellcheck="false"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-          />
+    <GlassCard v-else-if="activeTab === 'security'" class="security-card" no-padding>
+      <div class="security-panel">
+        <!-- 头部区域 -->
+        <div class="dev-header">
+          <div class="dev-header-content">
+            <div class="dev-title-section">
+              <div class="dev-icon-wrapper">
+                <i class="ri-lock-line"></i>
+              </div>
+              <div class="dev-title-info">
+                <h2 class="dev-title">安全设置</h2>
+                <p class="dev-subtitle">管理账户安全，保护个人信息</p>
+              </div>
+            </div>
+            <!-- 右上角按钮 -->
+            <button class="dev-create-btn" @click="handlePasswordChange">
+              <i class="ri-lock-password-line"></i>
+              <span>修改密码</span>
+            </button>
+          </div>
         </div>
-        <div class="form-group mb-md">
-          <label class="form-label">新密码</label>
-          <input
-            type="password"
-            v-model="securityForm.newPassword"
-            class="form-input"
-            placeholder="请输入新密码（至少6位）"
-            spellcheck="false"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-          />
-        </div>
-        <div class="form-group mb-md">
-          <label class="form-label">确认新密码</label>
-          <input
-            type="password"
-            v-model="securityForm.confirmPassword"
-            class="form-input"
-            placeholder="请再次输入新密码"
-            spellcheck="false"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-          />
+
+        <!-- 内容区域 - 三列布局 -->
+        <div class="dev-content">
+          <div class="security-form-grid">
+            <div class="form-group">
+              <label class="form-label">当前密码</label>
+              <input
+                type="password"
+                v-model="securityForm.oldPassword"
+                class="form-input"
+                placeholder="请输入当前密码"
+                spellcheck="false"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">新密码</label>
+              <input
+                type="password"
+                v-model="securityForm.newPassword"
+                class="form-input"
+                placeholder="请输入新密码（至少6位）"
+                spellcheck="false"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">确认新密码</label>
+              <input
+                type="password"
+                v-model="securityForm.confirmPassword"
+                class="form-input"
+                placeholder="请再次输入新密码"
+                spellcheck="false"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </GlassCard>
 
-    <!-- Notification Settings (Admin Only) -->
-    <GlassCard v-else-if="activeTab === 'notification'">
-      <div class="glass-card-header border-b border-color-border p-md flex justify-between items-center">
-        <h3 class="glass-card-title">通知管理</h3>
-        <button v-if="isAdmin" class="btn btn-primary btn-sm" @click="showCreateNotificationModal = true">
-          <i class="ri-add-line mr-2"></i>发送通知
-        </button>
-      </div>
-      <div class="p-md">
-        <!-- 通知列表 -->
-        <div v-if="notificationLoading" class="text-center py-lg">
-          <i class="ri-loader-4-line animate-spin text-2xl text-secondary"></i>
-        </div>
-        <div v-else-if="notifications.length === 0" class="text-center py-lg text-secondary">
-          暂无通知
-        </div>
-        <div v-else class="notification-list">
-          <div
-            v-for="notification in notifications"
-            :key="notification.id"
-            class="notification-card"
-            @click="viewNotificationDetail(notification)"
-          >
-            <div class="notification-content">
-              <div class="notification-header">
-                <span class="notification-type-badge" :class="'type-' + notification.type">
-                  {{ notification.type === 2 ? '活动' : (notification.type === 3 ? '私信' : '系统') }}
-                </span>
-                <span class="notification-target">
-                  {{ notification.is_global === 1 ? '全员通知' : '私信通知' }}
-                </span>
-              </div>
-              <h4 class="notification-title flex items-center gap-2">
-                <div class="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" v-if="!notification.is_read"></div>
-                <span :class="{'unread-title': !notification.is_read, 'read-title': notification.is_read}">{{ notification.title }}</span>
-              </h4>
-              <p class="notification-desc">{{ notification.content }}</p>
-              <div class="notification-meta">
-                {{ new Date(notification.create_time).toLocaleString() }}
-                <span v-if="notification.sender"> · 发送者: {{ notification.sender.name }}</span>
-              </div>
-            </div>
-            <div class="notification-actions" v-if="isAdmin">
-              <button
-                class="btn btn-ghost btn-sm"
-                @click.stop="editNotification(notification)"
-                title="编辑"
-              >
-                <i class="ri-edit-line"></i>
-              </button>
-              <button
-                class="btn btn-ghost btn-sm text-danger"
-                @click.stop="handleDeleteNotification(notification.id)"
-                title="删除"
-              >
-                <i class="ri-delete-bin-line"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 分页 -->
-        <div v-if="notifications.length > 0" class="notification-pagination">
-          <div class="pagination-left">
-            <span class="pagination-info">{{ notificationPaginationInfo }}</span>
-            <div class="page-size-selector">
-              <select v-model="notificationPageSize" class="page-select">
-                <option :value="5">5条/页</option>
-                <option :value="10">10条/页</option>
-              </select>
-            </div>
-          </div>
-          <div class="pagination-controls">
-            <button class="btn btn-sm btn-ghost" :disabled="notificationCurrentPage === 1" @click="notificationPrevPage">
-              <i class="ri-arrow-left-s-line"></i>
-            </button>
-            <div class="page-numbers">
-              <button
-                v-for="page in notificationTotalPages"
-                :key="page"
-                class="btn btn-sm page-btn"
-                :class="{ active: notificationCurrentPage === page }"
-                @click="notificationGoToPage(page)"
-              >
-                {{ page }}
-              </button>
-            </div>
-            <button class="btn btn-sm btn-ghost" :disabled="notificationCurrentPage === notificationTotalPages" @click="notificationNextPage">
-              <i class="ri-arrow-right-s-line"></i>
-            </button>
-          </div>
-        </div>
-      </div>
+    <!-- Notification Settings -->
+    <GlassCard v-else-if="activeTab === 'notification'" class="h-full" no-padding>
+      <NotificationManagement :is-admin="isAdmin" />
     </GlassCard>
 
     <!-- Appearance Settings -->
-    <GlassCard v-else-if="activeTab === 'appearance'">
-      <div class="glass-card-header border-b border-color-border p-md">
-        <h3 class="glass-card-title">外观设置</h3>
-      </div>
-      <div class="appearance-form p-md">
-        <div class="form-group">
+    <GlassCard v-else-if="activeTab === 'appearance'" class="appearance-card" no-padding>
+      <div class="appearance-panel">
+        <!-- 头部区域 -->
+        <div class="appearance-header">
+          <div class="appearance-header-main">
+            <div class="appearance-title-wrapper">
+              <div class="appearance-icon">
+                <i class="ri-palette-line"></i>
+              </div>
+              <div class="appearance-title-content">
+                <h2 class="appearance-title">外观设置</h2>
+                <p class="appearance-subtitle">自定义界面主题，打造专属的使用体验</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
+        <!-- 主题选择内容 -->
+        <div class="appearance-content">
           <div class="grid grid-cols-3 gap-4">
             <div
               v-for="t in themes"
@@ -937,201 +472,112 @@ onMounted(() => {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </GlassCard>
 
 
 
-    <!-- About Page -->
-    <GlassCard v-else-if="activeTab === 'about'" class="h-auto min-h-full">
-      <div class="flex flex-col items-center justify-center py-40 px-12 gap-8">
-        <!-- Logo & Title -->
-        <div class="text-center w-full flex flex-col items-center">
-          <img src="/orange.png" alt="Orange Logo" style="margin-bottom: 1rem;" class="w-28 h-28 object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500" />
-          <h2 style="margin-bottom: 0.3rem; color: #FF9F0A;" class="text-4xl font-bold tracking-tight">Orange</h2>
-          <div class="flex items-center justify-center gap-4">
-            <span style="padding: 0.2rem 0.3rem;" class="rounded-full bg-blue-500/10 text-blue-500 text-sm font-bold border border-blue-500/20 shadow-sm">v{{ pkg.version }}</span>
-            <span class="text-secondary text-base">小旭姐专属记账工具</span>
+    <!-- About Page - Liquid Glass Premium Edition -->
+    <GlassCard v-else-if="activeTab === 'about'" class="about-page h-auto min-h-full">
+      <div class="about-container">
+        <!-- Hero Section -->
+        <div class="about-hero">
+          <div class="logo-wrapper">
+            <div class="logo-glow"></div>
+            <img src="/orange.png" alt="Orange Logo" class="about-logo" />
+          </div>
+          <h1 class="about-title">Orange</h1>
+          <div class="about-subtitle">
+            <span class="version-badge">v{{ pkg.version }}</span>
+            <span class="tagline">小旭姐专属记账工具</span>
           </div>
         </div>
 
-        <!-- Info Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-12 w-full max-w-6xl">
+        <!-- Floating Info Cards -->
+        <div class="info-cards-grid">
           <!-- Author Card -->
-          <div style="padding: 2.5rem 2rem;" class="about-card group relative border border-gray-100 dark:border-white/10 rounded-[2rem] flex flex-col items-center text-center transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/10 hover:border-blue-500/30 shadow-sm">
-            <div style="margin-bottom: 1rem;" class="w-16 h-16 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <i class="ri-user-smile-line text-3xl"></i>
+          <div class="info-card info-card-author">
+            <div class="card-glass">
+              <div class="card-icon-wrapper">
+                <i class="ri-user-smile-line"></i>
+              </div>
+              <div class="card-label">作者</div>
+              <div class="card-value">willxue</div>
             </div>
-            <div style="margin-bottom: 0.3rem;" class="text-sm text-secondary font-medium">作者</div>
-            <div style="color: #FF9F0A;" class="text-xl font-bold">willxue</div>
           </div>
           
           <!-- WeChat Card -->
-          <div style="padding: 2.5rem 2rem;" class="about-card group relative border border-gray-100 dark:border-white/10 rounded-[2rem] flex flex-col items-center text-center transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-green-500/10 hover:border-green-500/30 shadow-sm">
-            <div style="margin-bottom: 1rem;" class="w-16 h-16 rounded-2xl bg-green-500/10 text-green-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <i class="ri-wechat-line text-3xl"></i>
+          <div class="info-card info-card-wechat">
+            <div class="card-glass">
+              <div class="card-icon-wrapper">
+                <i class="ri-wechat-line"></i>
+              </div>
+              <div class="card-label">微信公众号</div>
+              <div class="card-value">为学书院</div>
             </div>
-            <div style="margin-bottom: 0.3rem;" class="text-sm text-secondary font-medium">微信公众号</div>
-            <div style="color: #FF9F0A;" class="text-xl font-bold">为学书院</div>
           </div>
 
           <!-- GitHub Card -->
-          <div @click="openGitHub" style="padding: 2.5rem 2rem;" class="about-card group relative border border-gray-100 dark:border-white/10 rounded-[2rem] flex flex-col items-center text-center transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-gray-500/10 hover:border-gray-500/30 cursor-pointer shadow-sm">
-            <div style="margin-bottom: 1rem;" class="w-16 h-16 rounded-2xl bg-gray-500/10 text-gray-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <i class="ri-github-line text-3xl"></i>
-            </div>
-            <div style="margin-bottom: 0.3rem;" class="text-sm text-secondary font-medium">开源地址</div>
-            <div style="color: #FF9F0A;" class="text-xl font-bold flex items-center gap-2">
-              FruitsAI/Orange <i class="ri-external-link-line text-base opacity-50"></i>
+          <div class="info-card info-card-github" @click="openGitHub">
+            <div class="card-glass">
+              <div class="card-icon-wrapper">
+                <i class="ri-github-line"></i>
+              </div>
+              <div class="card-label">开源地址</div>
+              <div class="card-value">
+                FruitsAI/Orange
+                <i class="ri-arrow-right-up-line external-icon"></i>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Tech Stack -->
-        <div class="flex flex-wrap justify-center gap-5">
-          <span class="tech-badge rounded-xl border text-base font-medium font-mono transition-colors cursor-default shadow-sm" style="padding: 0.2rem 0.3rem;">Wails v3</span>
-          <span class="tech-badge rounded-xl border text-base font-medium font-mono transition-colors cursor-default shadow-sm" style="padding: 0.2rem 0.3rem;">Vue 3</span>
-          <span class="tech-badge rounded-xl border text-base font-medium font-mono transition-colors cursor-default shadow-sm" style="padding: 0.2rem 0.3rem;">TypeScript</span>
-          <span class="tech-badge rounded-xl border text-base font-medium font-mono transition-colors cursor-default shadow-sm" style="padding: 0.2rem 0.3rem;">Go</span>
+        <!-- Tech Stack Pills -->
+        <div class="tech-stack">
+          <div class="tech-pill" data-tech="wails">
+            <span class="tech-dot"></span>
+            <span class="tech-name">Wails v3</span>
+          </div>
+          <div class="tech-pill" data-tech="vue">
+            <span class="tech-dot"></span>
+            <span class="tech-name">Vue 3</span>
+          </div>
+          <div class="tech-pill" data-tech="ts">
+            <span class="tech-dot"></span>
+            <span class="tech-name">TypeScript</span>
+          </div>
+          <div class="tech-pill" data-tech="go">
+            <span class="tech-dot"></span>
+            <span class="tech-name">Go</span>
+          </div>
         </div>
 
         <!-- Update Button -->
-        <button class="btn btn-primary px-12 py-4 h-auto text-lg font-medium shadow-2xl shadow-orange-500/30 hover:shadow-orange-500/40 hover:-translate-y-1 transition-all rounded-xl" @click="checkUpdate" :disabled="checkingUpdate">
-          <i class="ri-loop-left-line mr-3" :class="{ 'animate-spin': checkingUpdate }"></i>
-          {{ checkingUpdate ? '正在检测...' : '检测更新' }}
+        <button 
+          class="update-btn" 
+          @click="checkUpdate" 
+          :disabled="checkingUpdate"
+          :class="{ 'updating': checkingUpdate }"
+        >
+          <span class="btn-glow"></span>
+          <span class="btn-content">
+            <i class="ri-loop-left-line btn-icon" :class="{ 'spinning': checkingUpdate }"></i>
+            <span class="btn-text">{{ checkingUpdate ? '正在检测更新...' : '检测更新' }}</span>
+          </span>
         </button>
 
         <!-- Copyright -->
-        <div class="text-sm text-tertiary opacity-60">
-          Copyright © {{ new Date().getFullYear() }} FruitsAI. All rights reserved.
+        <div class="copyright">
+          <span class="copyright-text">© {{ new Date().getFullYear() }} FruitsAI</span>
+          <span class="copyright-divider">·</span>
+          <span class="copyright-rights">All rights reserved</span>
         </div>
       </div>
     </GlassCard>
 
 
-    <!-- Notification Modal -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showCreateNotificationModal" class="modal-overlay open" @click.self="showCreateNotificationModal = false">
-          <div class="modal open">
-            <div class="modal-header" style="border-bottom: 1px solid var(--separator-color); padding-bottom: 16px; margin-bottom: 24px;">
-              <h3 class="modal-title">{{ isEditingNotification ? '编辑通知' : '发送通知' }}</h3>
-              <button class="modal-close" @click="showCreateNotificationModal = false">
-                <i class="ri-close-line"></i>
-              </button>
-            </div>
-            <div class="modal-body">
-              <div class="form-group mb-md">
-                <label class="form-label">通知标题</label>
-                <input
-                  type="text"
-                  v-model="newNotification.title"
-                  class="form-input"
-                  placeholder="请输入通知标题"
-                />
-              </div>
-              <div class="form-group mb-md">
-                <label class="form-label">通知内容</label>
-                <textarea
-                  v-model="newNotification.content"
-                  class="form-input"
-                  rows="4"
-                  placeholder="请输入通知内容"
-                ></textarea>
-              </div>
-              <div class="form-group mb-md">
-                <label class="form-label">通知类型</label>
-                <div class="input-wrapper">
-                  <select v-model="newNotification.type" class="form-select">
-                    <option value="system">系统通知</option>
-                    <option value="activity">活动通知</option>
-                  </select>
-                  <i class="ri-arrow-down-s-line select-arrow"></i>
-                </div>
-              </div>
-              <div class="form-group mb-md">
-                <label class="form-label">发送对象</label>
-                <div class="input-wrapper">
-                  <select v-model="newNotification.target_user_id" class="form-select">
-                    <option :value="0">全员通知</option>
-                    <option v-for="user in targetUsers" :key="user.id" :value="user.id">
-                      {{ user.name }} ({{ user.username }})
-                    </option>
-                  </select>
-                  <i class="ri-arrow-down-s-line select-arrow"></i>
-                </div>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-secondary" @click="showCreateNotificationModal = false">取消</button>
-              <button class="btn btn-primary" @click="isEditingNotification ? handleUpdateNotification() : handleCreateNotification()" :disabled="creatingNotification">
-                {{ creatingNotification ? '提交中...' : (isEditingNotification ? '更新' : '发送') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
-    <!-- Notification Detail Modal -->
-    <NotificationDetailModal
-      v-model="showNotificationDetailModal"
-      :notification="selectedNotification"
-    />
-
-    <!-- Dict Item Modal -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showModal" class="modal-overlay open" @click.self="showModal = false">
-          <div class="modal open">
-            <div class="modal-header" style="border-bottom: 1px solid var(--separator-color); padding-bottom: 16px; margin-bottom: 24px;">
-              <h3 class="modal-title">{{ isEditing ? '编辑条目' : '新增条目' }}</h3>
-              <button class="modal-close" @click="showModal = false">
-                <i class="ri-close-line"></i>
-              </button>
-            </div>
-            <div class="modal-body">
-              <div class="form-group mb-md">
-                <label class="form-label">名称 (Label)</label>
-                <input
-                  v-model="modalForm.label"
-                  type="text"
-                  class="form-input"
-                  spellcheck="false"
-                  autocomplete="off"
-                />
-              </div>
-              <div class="form-group mb-md">
-                <label class="form-label">值 (Value)</label>
-                <input
-                  v-model="modalForm.value"
-                  type="text"
-                  class="form-input"
-                  spellcheck="false"
-                  autocomplete="off"
-                />
-              </div>
-              <div class="form-group mb-md">
-                <label class="form-label">排序 (Sort)</label>
-                <input
-                  v-model.number="modalForm.sort"
-                  type="number"
-                  class="form-input"
-                  spellcheck="false"
-                  autocomplete="off"
-                />
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-secondary" @click="showModal = false">取消</button>
-              <button class="btn btn-primary" @click="handleModalSubmit">保存</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
@@ -1152,8 +598,292 @@ onMounted(() => {
   border-color: var(--separator-color);
 }
 
-.appearance-form {
-  max-width: 600px;
+/* ===== 个人信息面板 ===== */
+.profile-card {
+  /* 与左侧导航栏对齐 */
+  align-self: stretch;
+}
+
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* 个人信息表单网格 */
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.form-group-full {
+  grid-column: span 2;
+}
+
+/* ===== 外观设置面板 ===== */
+.appearance-card {
+  /* 与左侧导航栏对齐 */
+  align-self: stretch;
+}
+
+.appearance-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.appearance-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.appearance-header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.appearance-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.appearance-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 159, 10, 0.2) 0%, rgba(255, 159, 10, 0.05) 100%);
+  border: 1px solid rgba(255, 159, 10, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #FF9F0A;
+  box-shadow: 0 4px 12px rgba(255, 159, 10, 0.15);
+}
+
+.appearance-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.appearance-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0 0;
+}
+
+.appearance-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ===== 安全设置面板 ===== */
+.security-card {
+  /* 与左侧导航栏对齐 */
+  align-self: stretch;
+}
+
+.security-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* 复用通知管理的头部样式 */
+.dev-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dev-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.dev-title-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dev-icon-wrapper {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 159, 10, 0.15) 0%, rgba(255, 159, 10, 0.05) 100%);
+  border: 1px solid rgba(255, 159, 10, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #FF9F0A;
+  backdrop-filter: blur(8px);
+}
+
+
+.dev-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.dev-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0 0;
+}
+
+/* 复用统计卡片样式 */
+.dev-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.dev-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.dev-stat-card:hover {
+  border-color: rgba(255, 159, 10, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.dev-stat-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.dev-stat-icon.blue {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3B82F6;
+}
+
+.dev-stat-icon.orange {
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
+}
+
+.dev-stat-icon.green {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22C55E;
+}
+
+.dev-stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.dev-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.dev-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+
+/* 创建按钮样式 - 与通知管理保持一致 */
+.dev-create-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #FF9F0A;
+  color: white;
+  border: none;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(255, 159, 10, 0.3);
+  position: relative;
+  z-index: 10;
+}
+
+.dev-create-btn:hover {
+  background: #E58909;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
+}
+
+/* 内容区域 */
+.dev-content {
+  flex: 1;
+}
+
+.security-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+/* 安全设置提交按钮 */
+.security-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem;
+  background: #FF9F0A;
+  color: white;
+  border: none;
+  border-radius: 0.625rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(255, 159, 10, 0.35);
+  margin-top: 0.5rem;
+}
+
+.security-submit-btn:hover {
+  background: #E58909;
+  box-shadow: 0 6px 20px rgba(255, 159, 10, 0.45);
+  transform: translateY(-1px);
 }
 
 .theme-card {
@@ -1365,209 +1095,310 @@ onMounted(() => {
   .nav-icon {
     margin-right: var(--spacing-xs);
   }
-}
-/* Notification Settings Styles */
-.notification-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
 
-.notification-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: var(--spacing-md);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  transition: all 0.2s;
-  cursor: pointer;
-}
+  /* 外观设置响应式 */
+  .appearance-panel {
+    padding: 1rem;
+  }
 
-.notification-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
-}
+  .appearance-header-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-.notification-content {
-  flex: 1;
-  min-width: 0;
-  margin-right: var(--spacing-md);
-}
+  /* 安全设置响应式 */
+  .security-panel {
+    padding: 1rem;
+  }
 
-.notification-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-xs);
-}
+  .dev-header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-.notification-type-badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid currentColor;
-  font-weight: 500;
-}
+  .security-form-grid {
+    grid-template-columns: 1fr;
+  }
 
-/* System Notification */
-.type-1 {
-  color: #64748b; /* Slate-500 */
-  background: #f8fafc; /* Slate-50 */
-  border-color: #cbd5e1; /* Slate-300 */
-}
-
-/* Activity Notification */
-.type-2 {
-  color: #ef4444; /* Red-500 */
-  background: #fef2f2; /* Red-50 */
-  border-color: #fca5a5; /* Red-300 */
-}
-
-/* Private Notification */
-.type-3 {
-  color: #8b5cf6; /* Violet-500 */
-  background: #f5f3ff; /* Violet-50 */
-  border-color: #c4b5fd; /* Violet-300 */
-}
-
-.notification-target {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.notification-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-  line-height: 1.4;
-}
-
-.notification-desc {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.notification-meta {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.notification-actions {
-  display: flex;
-  gap: var(--spacing-xs);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.notification-card:hover .notification-actions {
-  opacity: 1;
+  .dev-create-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Dictionary Management Styles */
+.dict-management {
+  display: flex;
+  flex-direction: column;
+}
+
+.dict-management .dev-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dict-management .dev-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.dict-management .dev-title-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dict-management .dev-icon-wrapper {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 159, 10, 0.15) 0%, rgba(255, 159, 10, 0.05) 100%);
+  border: 1px solid rgba(255, 159, 10, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.375rem;
+  color: #FF9F0A;
+}
+
+.dict-management .dev-title-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.dict-management .dev-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.dict-management .dev-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.dict-management .dev-create-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #FF9F0A;
+  border: none;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
+}
+
+.dict-management .dev-create-btn:hover {
+  background: #F59300;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 159, 10, 0.4);
+}
+
+.dict-management .dev-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.dict-management .dev-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+}
+
+.dict-management .dev-stat-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+}
+
+.dict-management .dev-stat-icon.total {
+  background: linear-gradient(135deg, rgba(255, 159, 10, 0.15) 0%, rgba(255, 159, 10, 0.05) 100%);
+  color: #FF9F0A;
+}
+
+.dict-management .dev-stat-icon.items {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%);
+  color: #3B82F6;
+}
+
+.dict-management .dev-stat-icon.active {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%);
+  color: #22C55E;
+}
+
+.dict-management .dev-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.dict-management .dev-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dict-management .dev-stat-value.dict-code {
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.dict-management .dev-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .dict-layout {
   display: flex;
-  height: 100%;
 }
 
 .dict-sidebar {
-  width: 200px;
+  width: 180px;
   border-right: 1px solid var(--border-color);
   background: transparent;
   overflow-y: auto;
+  padding: 0.75rem 0;
+}
+
+.dict-sidebar-title {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .dict-nav-item {
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--text-secondary);
   border-left: 3px solid transparent;
   transition: all 0.2s;
 }
 
+.dict-nav-item i {
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
 .dict-nav-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .dict-nav-item.active {
-  background: white;
-  color: var(--color-primary);
-  border-left-color: var(--color-primary);
+  background: rgba(255, 159, 10, 0.08);
+  color: #FF9F0A;
+  border-left-color: #FF9F0A;
   font-weight: 500;
 }
 
-[data-theme='dark'] .dict-nav-item.active {
-  background: rgba(255, 255, 255, 0.05);
+.dict-nav-item.active i {
+  opacity: 1;
 }
 
 .dict-content {
   flex: 1;
-  padding: 24px;
+  padding: 1rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
+.dict-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+}
+
+.dict-empty-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 159, 10, 0.1) 0%, rgba(255, 159, 10, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  color: #FF9F0A;
+  margin-bottom: 1rem;
+}
+
+.dict-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.dict-empty-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
 .dict-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
-.dict-item {
+.dict-item-card {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: #f9fafb; /* Slightly gray for contrast */
-  border: var(--glass-border-subtle);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 0.625rem;
   transition: all 0.2s;
 }
 
-.dict-item:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-[data-theme='dark'] .dict-item {
-  background: rgba(255, 255, 255, 0.05);
+.dict-item-card:hover {
+  border-color: rgba(255, 159, 10, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
-@media (max-width: 640px) {
-  .dict-layout {
-    flex-direction: column;
-  }
-  .dict-sidebar {
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    overflow-x: auto;
-  }
-  .dict-nav-item {
-    border-left: none;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-  }
-  .dict-nav-item.active {
-    border-left: none;
-    border-bottom-color: var(--color-primary);
-  }
+.dict-item-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: #3B82F6;
+  flex-shrink: 0;
 }
+
+
 
 /* Reusing ConfirmModal styles for consistency */
 .confirm-overlay {
@@ -1678,58 +1509,613 @@ onMounted(() => {
 
 .fade-enter-active .confirm-modal,
 .fade-leave-active .confirm-modal {
+  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.fade-enter-from .confirm-modal,
+.fade-leave-to .confirm-modal {
+  transform: scale(0.9);
+  opacity: 0;
+}
+
+/* ============================================
+   About Page - Liquid Glass Premium Edition
+   ============================================ */
+
+.about-page {
+  --about-orange: #FF9F0A;
+  --about-orange-soft: rgba(255, 159, 10, 0.15);
+  --about-orange-glow: rgba(255, 159, 10, 0.4);
+  --about-card-bg: rgba(255, 255, 255, 0.6);
+  --about-card-border: rgba(255, 255, 255, 0.8);
+  --about-text-muted: rgba(60, 60, 67, 0.6);
+  
+  container-type: inline-size;
+}
+
+[data-theme='dark'] .about-page {
+  --about-card-bg: rgba(30, 30, 30, 0.5);
+  --about-card-border: rgba(255, 255, 255, 0.12);
+  --about-text-muted: rgba(255, 255, 255, 0.5);
+}
+
+.about-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  gap: 2.5rem;
+  min-height: 100%;
+  animation: about-fade-in 0.8s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+@keyframes about-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero Section */
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: hero-entrance 0.9s cubic-bezier(0.19, 1, 0.22, 1) 0.1s both;
+}
+
+@keyframes hero-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.logo-wrapper {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.logo-glow {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at center, var(--about-orange-glow) 0%, transparent 70%);
+  opacity: 0.6;
+  filter: blur(20px);
+  animation: logo-pulse 4s ease-in-out infinite;
+}
+
+@keyframes logo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.about-logo {
+  position: relative;
+  width: 6rem;
+  height: 6rem;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(255, 159, 10, 0.35));
   transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
-.fade-enter-from .confirm-modal {
-  transform: scale(0.9) translateY(20px);
+.about-logo:hover {
+  transform: scale(1.08) rotate(-3deg);
 }
 
-.fade-leave-to .confirm-modal {
-  transform: scale(0.95) translateY(10px);
+.about-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--about-orange) 0%, #FFB340 50%, #FF8C00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
+  text-shadow: 0 2px 40px rgba(255, 159, 10, 0.2);
 }
 
-.unread-title {
+.about-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.version-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35em 0.75em;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.05) 100%);
+  color: #3B82F6;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 100px;
+  letter-spacing: 0.02em;
+  box-shadow: 
+    0 2px 8px rgba(59, 130, 246, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-theme='dark'] .version-badge {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.tagline {
+  font-size: 0.9375rem;
+  color: var(--about-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* Floating Info Cards */
+.info-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 720px;
+  animation: cards-entrance 0.9s cubic-bezier(0.19, 1, 0.22, 1) 0.2s both;
+}
+
+@keyframes cards-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.info-card {
+  position: relative;
+  perspective: 1000px;
+}
+
+.card-glass {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.75rem 1.25rem;
+  min-height: 180px;
+  background: var(--about-card-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--about-card-border);
+  border-radius: 20px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.04),
+    0 10px 20px -4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+  overflow: hidden;
+}
+
+[data-theme='dark'] .card-glass {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.2),
+    0 10px 20px -4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.card-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.info-card:hover .card-glass {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 20px 40px -8px rgba(0, 0, 0, 0.1),
+    0 8px 16px -4px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.info-card-author:hover .card-glass {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 
+    0 20px 40px -8px rgba(59, 130, 246, 0.2),
+    0 8px 16px -4px rgba(59, 130, 246, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.info-card-wechat:hover .card-glass {
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 
+    0 20px 40px -8px rgba(34, 197, 94, 0.2),
+    0 8px 16px -4px rgba(34, 197, 94, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.info-card-github {
+  cursor: pointer;
+}
+
+.info-card-github:hover .card-glass {
+  border-color: rgba(100, 100, 100, 0.4);
+  box-shadow: 
+    0 20px 40px -8px rgba(100, 100, 100, 0.2),
+    0 8px 16px -4px rgba(100, 100, 100, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.card-icon-wrapper {
+  position: relative;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.info-card-author .card-icon-wrapper {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.05) 100%);
+  color: #3B82F6;
+  box-shadow: 
+    0 4px 12px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.info-card-wechat .card-icon-wrapper {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(34, 197, 94, 0.05) 100%);
+  color: #22C55E;
+  box-shadow: 
+    0 4px 12px rgba(34, 197, 94, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.info-card-github .card-icon-wrapper {
+  background: linear-gradient(135deg, rgba(100, 100, 100, 0.12) 0%, rgba(100, 100, 100, 0.05) 100%);
+  color: #666;
+  box-shadow: 
+    0 4px 12px rgba(100, 100, 100, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-theme='dark'] .info-card-github .card-icon-wrapper {
+  color: #999;
+}
+
+.info-card:hover .card-icon-wrapper {
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.card-label {
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--about-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.375rem;
 }
 
-[data-theme='dark'] .unread-title {
-  color: #f3f4f6;
+.card-value {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--about-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  white-space: nowrap;
 }
 
-.read-title {
-  color: #9ca3af;
+.external-icon {
+  font-size: 0.875rem;
+  opacity: 0.6;
+  transition: all 0.3s ease;
 }
 
-/* Custom About Card Styles to bypass specificity/config issues */
-.about-card {
-  background-color: white;
-  border-color: #f3f4f6; /* gray-100 */
+.info-card-github:hover .external-icon {
+  opacity: 1;
+  transform: translate(2px, -2px);
 }
 
-[data-theme='dark'] .about-card {
-  background-color: rgba(39, 39, 42, 0.5); /* zinc-800 with 50% opacity */
-  border-color: rgba(255, 255, 255, 0.05); /* Soft border */
+/* Tech Stack */
+.tech-stack {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  animation: tech-entrance 0.9s cubic-bezier(0.19, 1, 0.22, 1) 0.3s both;
 }
 
-/* Tech Stack Badges */
-.tech-badge {
-  background-color: white;
-  border-color: #e5e7eb; /* gray-200 */
+@keyframes tech-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tech-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  background: var(--about-card-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--about-card-border);
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
   color: var(--text-secondary);
+  transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  cursor: default;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.tech-badge:hover {
-  background-color: #f9fafb; /* gray-50 */
+.tech-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 16px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
-[data-theme='dark'] .tech-badge {
-  background-color: rgba(39, 39, 42, 0.5);
-  border-color: rgba(255, 255, 255, 0.05);
+.tech-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: tech-dot-pulse 2s ease-in-out infinite;
 }
 
-[data-theme='dark'] .tech-badge:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.tech-pill[data-tech="wails"] .tech-dot {
+  background: #E53E3E;
+  box-shadow: 0 0 8px rgba(229, 62, 62, 0.5);
+}
+
+.tech-pill[data-tech="vue"] .tech-dot {
+  background: #42B883;
+  box-shadow: 0 0 8px rgba(66, 184, 131, 0.5);
+  animation-delay: 0.3s;
+}
+
+.tech-pill[data-tech="ts"] .tech-dot {
+  background: #3178C6;
+  box-shadow: 0 0 8px rgba(49, 120, 198, 0.5);
+  animation-delay: 0.6s;
+}
+
+.tech-pill[data-tech="go"] .tech-dot {
+  background: #00ADD8;
+  box-shadow: 0 0 8px rgba(0, 173, 216, 0.5);
+  animation-delay: 0.9s;
+}
+
+@keyframes tech-dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+.tech-pill:hover .tech-dot {
+  animation-duration: 0.8s;
+}
+
+/* Update Button */
+.update-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.625rem 1.5rem;
+  background: linear-gradient(135deg, var(--about-orange) 0%, #FFB340 100%);
+  border: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+  box-shadow:
+    0 4px 12px rgba(255, 159, 10, 0.3),
+    0 6px 20px rgba(255, 159, 10, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: btn-entrance 0.9s cubic-bezier(0.19, 1, 0.22, 1) 0.4s both;
+}
+
+@keyframes btn-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.btn-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.update-btn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 
+    0 8px 24px rgba(255, 159, 10, 0.45),
+    0 16px 48px rgba(255, 159, 10, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.update-btn:hover .btn-glow {
+  opacity: 1;
+}
+
+.update-btn:active:not(:disabled) {
+  transform: translateY(-1px) scale(0.98);
+  box-shadow: 
+    0 4px 12px rgba(255, 159, 10, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.update-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.update-btn.updating {
+  background: linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  z-index: 1;
+}
+
+.btn-icon {
+  font-size: 1.125rem;
+  transition: transform 0.3s ease;
+}
+
+.btn-icon.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.btn-text {
+  letter-spacing: 0.02em;
+}
+
+/* Copyright */
+.copyright {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--about-text-muted);
+  font-weight: 500;
+  animation: copyright-entrance 0.9s cubic-bezier(0.19, 1, 0.22, 1) 0.5s both;
+}
+
+@keyframes copyright-entrance {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.copyright-divider {
+  opacity: 0.4;
+}
+
+.copyright-rights {
+  opacity: 0.7;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .info-cards-grid {
+    grid-template-columns: 1fr;
+    max-width: 320px;
+  }
+  
+  .about-subtitle {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .tech-stack {
+    gap: 0.5rem;
+  }
+  
+  .tech-pill {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  
+  .update-btn {
+    padding: 0.875rem 2rem;
+    width: 100%;
+    max-width: 280px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .info-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  
+  .card-glass {
+    padding: 1.5rem 1rem;
+  }
+  
+  .card-icon-wrapper {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.25rem;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .about-container,
+  .about-hero,
+  .info-cards-grid,
+  .tech-stack,
+  .update-btn,
+  .copyright {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  
+  .logo-glow {
+    animation: none;
+  }
+  
+  .tech-dot {
+    animation: none;
+  }
 }
 </style>

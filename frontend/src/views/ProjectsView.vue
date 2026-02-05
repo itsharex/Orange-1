@@ -111,6 +111,51 @@ const goToPage = (page: number) => {
   currentPage.value = page
 }
 
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  const delta = 2 // Show 2 pages before and after current
+  
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  
+  const pages: (number | string)[] = [1]
+  
+  // Calculate range
+  let start = current - delta
+  let end = current + delta
+  
+  // Adjust window if close to start
+  if (start <= 2) {
+    start = 2
+    end = Math.min(6, total - 1)
+  }
+  // Adjust window if close to end
+  else if (end >= total - 1) {
+    end = total - 1
+    start = Math.max(total - 5, 2)
+  }
+  
+  if (start > 2) {
+    pages.push('...')
+  }
+  
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  
+  if (end < total - 1) {
+    pages.push('...')
+  }
+  
+  if (total > 1) {
+    pages.push(total)
+  }
+  
+  return pages
+})
+
 // Helpers
 const getStatusLabel = (status: string) => {
   const map: Record<string, string> = {
@@ -386,43 +431,47 @@ onActivated(() => {
     </GlassCard>
 
     <!-- Pagination Footer -->
-    <div class="pagination-footer" v-if="projects.length > 0">
-      <div class="flex items-center gap-md">
-        <div class="pagination-info">
-          {{ paginationInfo }}
+    <div class="projects-pagination" v-if="projects.length > 0">
+      <div class="pagination-inner">
+        <span class="pagination-info">{{ paginationInfo }}</span>
+        
+        <div class="pagination-controls">
+          <button 
+            class="page-btn" 
+            :disabled="currentPage === 1" 
+            @click="prevPage"
+          >
+            <i class="ri-arrow-left-s-line"></i>
+          </button>
+          
+          <div class="page-numbers">
+            <button
+              v-for="(page, index) in visiblePages"
+              :key="index"
+              class="page-number"
+              :class="{ active: currentPage === page, 'cursor-default': page === '...' }"
+              :disabled="currentPage === page || page === '...'"
+              @click="typeof page === 'number' && goToPage(page)"
+            >
+              {{ page }}
+            </button>
+          </div>
+          
+          <button 
+            class="page-btn" 
+            :disabled="currentPage === totalPages" 
+            @click="nextPage"
+          >
+            <i class="ri-arrow-right-s-line"></i>
+          </button>
         </div>
-        <div class="page-size-selector">
+        
+        <div class="page-size">
           <select v-model="pageSize" class="page-select">
             <option :value="5">5条/页</option>
             <option :value="10">10条/页</option>
           </select>
-          <i class="ri-arrow-down-s-line select-arrow"></i>
         </div>
-      </div>
-      <div class="pagination-controls">
-        <button class="btn btn-sm btn-ghost" :disabled="currentPage === 1" @click="prevPage">
-          <i class="ri-arrow-left-s-line"></i>
-        </button>
-
-        <div class="page-numbers">
-          <button
-            v-for="page in totalPages"
-            :key="page"
-            class="btn btn-sm page-btn"
-            :class="{ active: currentPage === page }"
-            @click="goToPage(page)"
-          >
-            {{ page }}
-          </button>
-        </div>
-
-        <button
-          class="btn btn-sm btn-ghost"
-          :disabled="currentPage === totalPages"
-          @click="nextPage"
-        >
-          <i class="ri-arrow-right-s-line"></i>
-        </button>
       </div>
     </div>
   </div>
@@ -600,93 +649,123 @@ onActivated(() => {
   color: var(--color-warning);
 }
 
-/* Pagination Footer */
-.pagination-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
+/* Pagination Styles - Matching UserManagement */
+.projects-pagination {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
   border-top: 1px solid var(--border-color);
 }
 
-.pagination-info {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.page-size-selector {
-  position: relative;
-  display: flex;
+.pagination-inner {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  gap: 1rem;
 }
 
-.page-select {
-  appearance: none;
-  background: transparent;
-  border: 1px solid transparent;
-  padding: 4px 24px 4px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+.pagination-info {
+  font-size: 0.875rem;
   color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-select:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.page-select:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.select-arrow {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  color: var(--text-tertiary);
-  pointer-events: none;
+  font-weight: 500;
+  justify-self: start;
 }
 
 .pagination-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.375rem;
+  justify-self: center;
+}
+
+.page-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0; /* Reset padding */
+  min-width: auto; /* Reset min-width */
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .page-numbers {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
-.page-btn {
-  min-width: 32px;
-  height: 32px;
-  padding: 0;
+.page-number {
+  min-width: 2.25rem;
+  height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  font-weight: 500;
   background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0 0.625rem;
 }
 
-.page-btn:hover {
-  background: var(--bg-hover);
+.page-number:hover {
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
-.page-btn.active {
-  background: var(--color-primary);
+.page-number.active {
+  background: #FF9F0A;
+  border-color: transparent;
   color: white;
-  border-color: var(--color-primary);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
 }
 
-[data-theme='dark'] .pagination-footer {
+.page-size {
+  display: flex;
+  justify-content: flex-end;
+  justify-self: end;
+}
+
+.page-size .page-select {
+  padding: 0.5rem 2rem 0.5rem 0.875rem;
+  background: var(--bg-base);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+}
+
+.page-size .page-select:focus {
+  border-color: #FF9F0A;
+  background-color: var(--bg-elevated);
+  outline: none;
+}
+
+[data-theme='dark'] .projects-pagination {
   border-top-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -716,9 +795,10 @@ onActivated(() => {
 }
 
 .search-input {
-  border: none;
-  background: none;
-  outline: none;
+  border: none !important;
+  background: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   font-size: 14px;
   color: var(--text-primary);
   width: 100%;

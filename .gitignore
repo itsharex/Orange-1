@@ -49,3 +49,6 @@ cover.out
 .ai_memory/
 
 AGENTS.md
+
+.sisyphus/
+.spec-workflow/
